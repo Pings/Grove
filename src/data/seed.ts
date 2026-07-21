@@ -60,7 +60,7 @@ export const SEED_ENTRIES: SeedEntry[] = [
 
   // Numbers useful for dates/size
   { hanzi: '四', english: 'four', type: 'word', topics: ['Other'], hsk: 1 },
-  { hanzi: '两', english: 'two (before measure words)', type: 'word', topics: ['Grammar'], hsk: 1, notes: 'Use 两 before measure words, not 二.' },
+  { hanzi: '两', english: 'two (before measure words)', type: 'word', topics: ['Measure Words'], hsk: 1, notes: 'Use 两 before measure words, not 二.' },
   { hanzi: '几', english: 'how many (small number)', type: 'word', topics: ['Questions'], hsk: 1, notes: 'Usually for small numbers under ~10.' },
   { hanzi: '多少', english: 'how many / how much', type: 'word', topics: ['Questions'], hsk: 1 },
   { hanzi: '岁', english: 'years old', type: 'word', topics: ['People'], hsk: 1 },
@@ -163,7 +163,7 @@ export const SEED_ENTRIES: SeedEntry[] = [
   { hanzi: '那本书', english: 'that book', type: 'phrase', topics: ['Study'], hsk: 1 },
   { hanzi: '一本汉语书', english: 'a Chinese book', type: 'phrase', topics: ['Study'], hsk: 1 },
   { hanzi: '一些书', english: 'some books', type: 'phrase', topics: ['Study'], hsk: 1, notes: 'Avoid 一些本书 — 本 is already a measure word.' },
-  { hanzi: '本', english: 'measure word for books', type: 'word', topics: ['Grammar', 'Study'], hsk: 1 },
+  { hanzi: '本', english: 'measure word for books', type: 'word', topics: ['Measure Words', 'Study'], hsk: 1 },
   { hanzi: '你学什么', english: 'What do you study?', type: 'sentence', topics: ['Study', 'Questions'], hsk: 1 },
   { hanzi: '我学汉语', english: 'I study Chinese', type: 'sentence', topics: ['Study'], hsk: 1 },
   { hanzi: '怎么写你的名字', english: 'How do you write your name?', type: 'sentence', topics: ['Questions', 'Study'], hsk: 1 },
@@ -185,7 +185,7 @@ export const SEED_ENTRIES: SeedEntry[] = [
   { hanzi: '鸭蛋', english: 'duck egg', type: 'word', topics: ['Food'], hsk: 2 },
   { hanzi: '冰淇淋', english: 'ice cream', type: 'word', topics: ['Food'], hsk: 2 },
   { hanzi: '茶', english: 'tea', type: 'word', topics: ['Food'], hsk: 1 },
-  { hanzi: '杯', english: 'measure word for cups/drinks', type: 'word', topics: ['Grammar', 'Food'], hsk: 1 },
+  { hanzi: '杯', english: 'measure word for cups/drinks', type: 'word', topics: ['Measure Words', 'Food'], hsk: 1 },
   { hanzi: '啤酒', english: 'beer', type: 'word', topics: ['Food'], hsk: 2 },
   { hanzi: '好吃', english: 'delicious', type: 'word', topics: ['Food', 'Adjectives'], hsk: 1 },
   { hanzi: '中国菜', english: 'Chinese food / dishes', type: 'phrase', topics: ['Food'], hsk: 1 },
@@ -201,7 +201,7 @@ export const SEED_ENTRIES: SeedEntry[] = [
   { hanzi: '买', english: 'buy', type: 'word', topics: ['Shopping'], hsk: 1 },
   { hanzi: '钱', english: 'money', type: 'word', topics: ['Shopping'], hsk: 1 },
   { hanzi: '多少钱', english: 'how much (price)', type: 'phrase', topics: ['Shopping', 'Questions'], hsk: 1 },
-  { hanzi: '块', english: 'yuan (informal)', type: 'word', topics: ['Shopping'], hsk: 1 },
+  { hanzi: '块', english: 'yuan (informal)', type: 'word', topics: ['Measure Words', 'Shopping'], hsk: 1 },
   { hanzi: '刀', english: 'dollar (spoken)', type: 'word', topics: ['Shopping'], hsk: 2 },
   { hanzi: '美元', english: 'US dollar', type: 'word', topics: ['Shopping'], hsk: 2 },
   { hanzi: '大', english: 'big', type: 'word', topics: ['Adjectives'], hsk: 1 },
@@ -213,7 +213,7 @@ export const SEED_ENTRIES: SeedEntry[] = [
   { hanzi: '这杯茶多少钱', english: 'How much is this cup of tea?', type: 'sentence', topics: ['Shopping', 'Food'], hsk: 1 },
   { hanzi: '种', english: 'kind / type', type: 'word', topics: ['Grammar'], hsk: 2 },
   { hanzi: '哪种', english: 'which kind', type: 'phrase', topics: ['Questions'], hsk: 2 },
-  { hanzi: '个', english: 'general measure word', type: 'word', topics: ['Grammar'], hsk: 1 },
+  { hanzi: '个', english: 'general measure word', type: 'word', topics: ['Measure Words'], hsk: 1 },
 
   // Adjectives / 好 compounds
   { hanzi: '好', english: 'good / well', type: 'word', topics: ['Adjectives'], hsk: 1 },
@@ -286,7 +286,7 @@ export const SEED_ENTRIES: SeedEntry[] = [
   { hanzi: '伴侣', english: 'partner', type: 'word', topics: ['Family'], hsk: 3 },
   { hanzi: '朋友', english: 'friend', type: 'word', topics: ['People'], hsk: 1 },
   { hanzi: '女朋友', english: 'girlfriend', type: 'word', topics: ['People'], hsk: 1 },
-  { hanzi: '口', english: 'measure word for family members', type: 'word', topics: ['Grammar', 'Family'], hsk: 1, notes: '六口人 = six people in the family.' },
+  { hanzi: '口', english: 'measure word for family members', type: 'word', topics: ['Measure Words', 'Family'], hsk: 1, notes: '六口人 = six people in the family.' },
   { hanzi: '你有没有哥哥', english: 'Do you have an older brother?', type: 'sentence', topics: ['Family', 'Questions'], hsk: 1 },
   { hanzi: '你家有几口人', english: 'How many people in your family?', type: 'sentence', topics: ['Family', 'Questions'], hsk: 1 },
   { hanzi: '我有一个弟弟', english: 'I have a younger brother', type: 'sentence', topics: ['Family'], hsk: 1 },
@@ -311,7 +311,7 @@ export const SEED_ENTRIES: SeedEntry[] = [
   // Pets / directions extras
   { hanzi: '狗', english: 'dog', type: 'word', topics: ['Pets'], hsk: 1 },
   { hanzi: '猫', english: 'cat', type: 'word', topics: ['Pets'], hsk: 1 },
-  { hanzi: '只', english: 'measure word for animals', type: 'word', topics: ['Grammar', 'Pets'], hsk: 1 },
+  { hanzi: '只', english: 'measure word for animals', type: 'word', topics: ['Measure Words', 'Pets'], hsk: 1 },
   { hanzi: '喂', english: 'to feed', type: 'word', topics: ['Pets'], hsk: 2 },
   { hanzi: '我有两只猫', english: 'I have two cats', type: 'sentence', topics: ['Pets'], hsk: 1 },
   { hanzi: '你的狗几岁', english: 'How old is your dog?', type: 'sentence', topics: ['Pets', 'Questions'], hsk: 1 },

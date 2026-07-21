@@ -1,5 +1,6 @@
 import Dexie, { type EntityTable } from 'dexie';
 import type { QuizQuestion, VocabEntry } from '../types';
+import { MEASURE_WORD_HANZI } from '../types';
 import { SEED_ENTRIES } from '../data/seed';
 import { GROWTH_DEMO_ENTRIES, WILTED_DEMO_HANZI, isGrowthDemoHanzi } from '../data/growthDemos';
 import { SEED_GRAMMAR_TIPS, SEED_HANZI_TIPS, TIPS_CONTENT_VERSION } from '../data/seedTips';
@@ -221,6 +222,22 @@ export async function migrateEntryFields(): Promise<void> {
       if (seed?.notes && entry.notes?.trim() === seed.notes.trim()) {
         patch.notes = '';
         changed = true;
+      }
+
+      // Retag classic measure words into the Measure Words topic.
+      const key = normalizeHanzi(entry.hanzi);
+      if ((MEASURE_WORD_HANZI as readonly string[]).includes(key)) {
+        const nextTopics = [
+          'Measure Words',
+          ...entry.topics.filter((t) => t !== 'Measure Words' && t !== 'Grammar'),
+        ];
+        if (
+          nextTopics.length !== entry.topics.length ||
+          nextTopics.some((t, i) => t !== entry.topics[i])
+        ) {
+          patch.topics = nextTopics;
+          changed = true;
+        }
       }
 
       // Skip scrubbing for kept (upvoted) tips so we never erase them.

@@ -80,8 +80,9 @@ Rules:
 - hsk is 1, 2, 3, or "unknown"
 - If input is a sentence, put full sentence in hanzi/english and split useful new words/short phrases into components (not every particle).
 - If input is already a single word/phrase, components may be empty or include meaningful sub-parts.
+- If the word is a measure word / 量词 (个, 本, 杯, 口, 只, 块, …), include topic "Measure Words".
 - Prefer Simplified Chinese.
-- notes: short learner tip only when useful (measure words, 了, tone nuance). Otherwise empty string.
+- notes: leave empty (grammar tips come from the library, not this step).
 
 Return ONLY JSON:
 {

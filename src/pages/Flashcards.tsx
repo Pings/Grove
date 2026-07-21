@@ -11,17 +11,19 @@ import {
   buildMultipleChoice,
   buildSessionQueue,
   countDueEntries,
+  drillModeFor,
+  filterEntriesForMode,
   formatAvgResponse,
   isPerformanceLearned,
   promptFor,
   promptSubtext,
+  sandhiNoteFor,
   type CardMode,
   type McOption,
   type ReviewOutcome,
 } from '../lib/flashcards';
 import { SpeakButton } from '../components/SpeakButton';
 import { getLearnedAvgMs } from '../lib/settings';
-import { isGrowthDemoEntry } from '../data/growthDemos';
 
 export function FlashcardsPage() {
   const [entries, setEntries] = useState<VocabEntry[]>([]);
@@ -54,8 +56,8 @@ export function FlashcardsPage() {
   }, [queue, index, entries]);
 
   const choicePool = useMemo(
-    () => entries.filter((e) => e.type !== 'sentence' && !isGrowthDemoEntry(e)),
-    [entries],
+    () => filterEntriesForMode(entries, mode),
+    [entries, mode],
   );
 
   const [choices, setChoices] = useState<McOption[]>([]);
@@ -97,7 +99,7 @@ export function FlashcardsPage() {
   }, [current?.id, current?.notes]);
 
   function startSession() {
-    const due = buildSessionQueue(entries, 25);
+    const due = buildSessionQueue(entries, 25, mode);
     setQueue(due);
     setIndex(0);
     setRevealed(false);
@@ -173,6 +175,9 @@ export function FlashcardsPage() {
   const scoreWrong = current?.wrongCount ?? 0;
   const avgLabel = current ? formatAvgResponse(current) : null;
   const fast = current ? isPerformanceLearned(current, getLearnedAvgMs()) : false;
+  const drill = drillModeFor(mode);
+  const sandhiNote = current && mode === 'hanzi-to-tone' ? sandhiNoteFor(current) : null;
+  const poolSize = filterEntriesForMode(entries, mode).length;
 
   return (
     <div className="stack">
@@ -195,6 +200,8 @@ export function FlashcardsPage() {
               <option value="hanzi-to-english">Hanzi → English</option>
               <option value="english-to-hanzi">English → Hanzi</option>
               <option value="pinyin-to-hanzi">Pinyin → Hanzi</option>
+              <option value="hanzi-to-tone">Hanzi → Tone</option>
+              <option value="measure-words">Measure Words 量词</option>
             </select>
           </label>
           <button type="button" className="btn btn-primary" onClick={startSession} disabled={active}>
@@ -207,8 +214,12 @@ export function FlashcardsPage() {
           )}
         </div>
         <div className="muted">
-          Due pool: {countDueEntries(entries)} words/phrases · Session{' '}
-          {sessionStats.correct}✓ {sessionStats.wrong}✗ {sessionStats.timeout}⏱
+          {mode === 'measure-words'
+            ? `Measure words in library: ${poolSize}`
+            : mode === 'hanzi-to-tone'
+              ? `Tone drills available: ${poolSize}`
+              : `Due pool: ${countDueEntries(entries, mode)} words/phrases`}{' '}
+          · Session {sessionStats.correct}✓ {sessionStats.wrong}✗ {sessionStats.timeout}⏱
         </div>
       </section>
 
@@ -216,7 +227,11 @@ export function FlashcardsPage() {
         <div className="panel empty">
           {entries.length === 0
             ? 'Your library is empty.'
-            : 'Press Start session when you are ready.'}
+            : poolSize === 0
+              ? mode === 'measure-words'
+                ? 'No measure words yet — add some under the Measure Words topic.'
+                : 'Nothing to drill in this mode yet.'
+              : 'Press Start session when you are ready.'}
         </div>
       )}
 
@@ -247,10 +262,10 @@ export function FlashcardsPage() {
             </div>
 
             <div
-              className={mode !== 'english-to-hanzi' ? 'hanzi-xl' : ''}
+              className={drill !== 'english-to-hanzi' ? 'hanzi-xl' : ''}
               style={{
-                fontFamily: mode !== 'english-to-hanzi' ? 'var(--font-zh)' : undefined,
-                fontSize: mode === 'english-to-hanzi' ? '1.6rem' : undefined,
+                fontFamily: drill !== 'english-to-hanzi' ? 'var(--font-zh-display)' : undefined,
+                fontSize: drill === 'english-to-hanzi' ? '1.6rem' : undefined,
               }}
             >
               {promptFor(current, mode)}
@@ -282,7 +297,9 @@ export function FlashcardsPage() {
                       className="mc-primary"
                       style={{
                         fontFamily:
-                          mode !== 'hanzi-to-english' ? 'var(--font-zh)' : undefined,
+                          drill === 'english-to-hanzi' || drill === 'pinyin-to-hanzi'
+                            ? 'var(--font-zh-display)'
+                            : undefined,
                       }}
                     >
                       {option.primary}
@@ -294,6 +311,15 @@ export function FlashcardsPage() {
                 );
               })}
             </div>
+
+            {revealed && mode === 'hanzi-to-tone' && (
+              <div className="tone-reveal muted">
+                <div>
+                  Citation pinyin: <strong>{current.pinyin}</strong>
+                </div>
+                {sandhiNote && <div className="tone-sandhi-note">{sandhiNote}</div>}
+              </div>
+            )}
 
             {revealed && lastOutcome === 'correct' && (
               <div className="flash-continue-row">
