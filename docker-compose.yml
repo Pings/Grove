@@ -1,0 +1,8 @@
+services:
+  grove:
+    build: .
+    image: grove:latest
+    container_name: grove
+    restart: unless-stopped
+    ports:
+      - "8080:80"
