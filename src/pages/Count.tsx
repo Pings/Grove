@@ -13,6 +13,7 @@ const MODES: Array<{ id: CountMode; title: string; hint: string }> = [
   { id: 'digits', title: 'Digits', hint: '0–99 in characters' },
   { id: 'dates', title: 'Dates', hint: 'Years, months, days, weekdays' },
   { id: 'times', title: 'Times', hint: '…点…分 / 半' },
+  { id: 'dayparts', title: 'Time of day', hint: '早上 / 下午 + clock' },
   { id: 'phone', title: 'Phone', hint: 'Digit by digit' },
 ];
 
@@ -69,7 +70,7 @@ export function CountPage() {
         <h1>
           Count <span className="page-title-zh">数</span>
         </h1>
-        <p>Keep 1–10 in view while you drill dates (with years), times, and phone numbers.</p>
+        <p>Keep 1–10 in view while you drill dates, clock times, time of day, and phone numbers.</p>
       </header>
 
       <section className="count-strip" aria-label="Numbers 0 to 10">
