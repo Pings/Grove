@@ -605,15 +605,15 @@ select:focus {
   position: relative;
   z-index: 1;
   padding-right: 2.6rem;
-  font-family: var(--font-zh);
+  font-family: var(--font-zh-display);
   font-size: 1.55rem;
-  font-weight: 700;
+  font-weight: 400;
   line-height: 1.25;
 }
 
 .entry-card-sentence .hanzi {
   font-size: 1.05rem;
-  font-weight: 600;
+  font-weight: 400;
   line-height: 1.4;
   padding-right: 0;
   word-break: break-word;
@@ -682,9 +682,9 @@ select:focus {
 }
 
 .growth-shelf-card .hanzi {
-  font-family: var(--font-zh);
+  font-family: var(--font-zh-display);
   font-size: 1.2rem;
-  font-weight: 700;
+  font-weight: 400;
 }
 
 .growth-shelf-card .pinyin {
@@ -1009,7 +1009,7 @@ select:focus {
 
 .mc-primary {
   font-size: 1.05rem;
-  font-weight: 600;
+  font-weight: 400;
   line-height: 1.25;
 }
 
@@ -1823,9 +1823,9 @@ select:focus {
 }
 
 .library-drawer-item .hanzi {
-  font-family: var(--font-zh);
+  font-family: var(--font-zh-display);
   font-size: 1.25rem;
-  font-weight: 700;
+  font-weight: 400;
 }
 
 .library-drawer-item .pinyin {
@@ -1897,9 +1897,9 @@ select:focus {
 }
 
 .count-digit-zh {
-  font-family: var(--font-zh);
+  font-family: var(--font-zh-display);
   font-size: clamp(1.05rem, 2.8vw, 1.45rem);
-  font-weight: 700;
+  font-weight: 400;
   line-height: 1.1;
   color: var(--ink);
 }
