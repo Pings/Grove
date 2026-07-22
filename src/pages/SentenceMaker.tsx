@@ -679,16 +679,11 @@ export function SentenceMakerPage() {
 
           {revealed && (
             <div className="stack" style={{ alignItems: 'center', textAlign: 'center' }}>
-              <div
-                className={`alert ${wasCorrect ? 'alert-info' : 'alert-warn'}`}
-                style={{ width: '100%' }}
-              >
-                {wasCorrect
-                  ? feedback?.meaningOk
-                    ? 'Accepted — good alternative!'
-                    : 'Correct!'
-                  : 'Not quite — see the answer below.'}
-              </div>
+              {wasCorrect && (
+                <div className="alert alert-info" style={{ width: '100%' }}>
+                  {feedback?.meaningOk ? 'Accepted — good alternative!' : 'Correct!'}
+                </div>
+              )}
 
               {feedbackLoading && (
                 <div className="muted" style={{ width: '100%' }}>
