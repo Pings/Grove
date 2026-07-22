@@ -108,7 +108,7 @@ export interface ComposeResult {
   notes?: string;
 }
 
-/** AI coaching when Level 3 typed answer ≠ expected sentence. */
+/** AI coaching when a Forms attempt ≠ expected sentence. */
 export interface Level3Feedback {
   /** True if the attempt still conveys the English prompt correctly. */
   meaningOk: boolean;

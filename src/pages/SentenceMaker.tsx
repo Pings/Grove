@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { liveQuery } from 'dexie';
 import { db, getQuizQuestions, normalizeHanzi, upsertEntry } from '../db/schema';
-import { generateSentenceExercise, reviewLevel3Attempt } from '../lib/gemini';
+import { generateSentenceExercise, explainFormsMistake } from '../lib/gemini';
 import { getApiKey, getLearnedAvgMs } from '../lib/settings';
 import { isPerformanceLearned, waterVocabEntries } from '../lib/flashcards';
 import { toPinyin } from '../lib/pinyin';
@@ -96,8 +96,8 @@ export function SentenceMakerPage() {
   const [wordBank, setWordBank] = useState<MakerMcOption[]>([]);
   const [wasCorrect, setWasCorrect] = useState(false);
   const [quizPoolSize, setQuizPoolSize] = useState(0);
-  const [l3Feedback, setL3Feedback] = useState<Level3Feedback | null>(null);
-  const [l3Loading, setL3Loading] = useState(false);
+  const [feedback, setFeedback] = useState<Level3Feedback | null>(null);
+  const [feedbackLoading, setFeedbackLoading] = useState(false);
   const [addingWords, setAddingWords] = useState(false);
   const [wordsAdded, setWordsAdded] = useState(false);
   const usedQuizIds = useRef(new Set<number>());
@@ -276,8 +276,8 @@ export function SentenceMakerPage() {
     setUsedChipIds(new Set());
     setTypedSentence('');
     setWasCorrect(false);
-    setL3Feedback(null);
-    setL3Loading(false);
+    setFeedback(null);
+    setFeedbackLoading(false);
     setAddingWords(false);
     setWordsAdded(false);
 
@@ -393,48 +393,49 @@ export function SentenceMakerPage() {
     }
   }
 
-  function checkBlanks() {
-    if (!exercise || revealed) return;
-    const ok = checkBlanksFilled(exercise.blanks, blankAnswers);
-    recordOutcome(ok);
+  function filledSentenceFromBlanks(): string {
+    if (!exercise) return '';
+    return exercise.segments
+      .map((seg) => {
+        if (seg.kind === 'text') return seg.value;
+        return blankAnswers[seg.blankId] ?? '___';
+      })
+      .join('');
   }
 
-  async function checkTyped() {
-    if (!exercise || revealed) return;
-    const ok = checkFullSentence(typedSentence, exercise.fullHanzi);
-    recordOutcome(ok);
-    setL3Feedback(null);
+  async function requestMistakeFeedback(userHanzi: string) {
+    if (!exercise) return;
+    setFeedback(null);
     setWordsAdded(false);
 
-    if (ok || level !== 3) return;
-
     if (!getApiKey()) {
-      setL3Feedback({
+      setFeedback({
         meaningOk: false,
-        note: 'Add a Gemini key in Settings to get coaching when answers differ.',
+        note: 'Add a Gemini key in Settings to get an explanation when answers differ.',
         newWords: [],
         newStructure: false,
       });
       return;
     }
 
-    setL3Loading(true);
+    setFeedbackLoading(true);
     try {
-      const fb = await reviewLevel3Attempt({
+      const fb = await explainFormsMistake({
+        level,
         englishPrompt: exercise.english,
         expectedHanzi: exercise.fullHanzi,
-        userHanzi: typedSentence.trim(),
+        userHanzi,
         knownVocab: vocab.map((e) => ({ hanzi: e.hanzi, english: e.english })),
       });
 
-      // Drop anything already saved (AI may miss duplicates).
       const known = new Set(entries.map((e) => normalizeHanzi(e.hanzi)));
       const filtered: Level3Feedback = {
         ...fb,
         newWords: fb.newWords.filter((w) => !known.has(normalizeHanzi(w.hanzi))),
       };
-      setL3Feedback(filtered);
+      setFeedback(filtered);
 
+      // Accept valid alternatives for typed levels (and rare L1 cases).
       if (filtered.meaningOk) {
         setWasCorrect(true);
         setSessionStats((s) => ({
@@ -443,22 +444,40 @@ export function SentenceMakerPage() {
         }));
       }
     } catch (err) {
-      setL3Feedback({
+      setFeedback({
         meaningOk: false,
         note: err instanceof Error ? err.message : 'Could not get coaching feedback.',
         newWords: [],
         newStructure: false,
       });
     } finally {
-      setL3Loading(false);
+      setFeedbackLoading(false);
+    }
+  }
+
+  function checkBlanks() {
+    if (!exercise || revealed) return;
+    const ok = checkBlanksFilled(exercise.blanks, blankAnswers);
+    recordOutcome(ok);
+    if (!ok) {
+      void requestMistakeFeedback(filledSentenceFromBlanks());
+    }
+  }
+
+  async function checkTyped() {
+    if (!exercise || revealed) return;
+    const ok = checkFullSentence(typedSentence, exercise.fullHanzi);
+    recordOutcome(ok);
+    if (!ok) {
+      await requestMistakeFeedback(typedSentence.trim());
     }
   }
 
   async function addSuggestedWords() {
-    if (!l3Feedback?.newWords.length || addingWords || wordsAdded) return;
+    if (!feedback?.newWords.length || addingWords || wordsAdded) return;
     setAddingWords(true);
     try {
-      for (const w of l3Feedback.newWords) {
+      for (const w of feedback.newWords) {
         await upsertEntry({
           hanzi: w.hanzi,
           pinyin: toPinyin(w.hanzi),
@@ -665,35 +684,34 @@ export function SentenceMakerPage() {
                 style={{ width: '100%' }}
               >
                 {wasCorrect
-                  ? l3Feedback?.meaningOk
+                  ? feedback?.meaningOk
                     ? 'Accepted — good alternative!'
                     : 'Correct!'
                   : 'Not quite — see the answer below.'}
               </div>
 
-              {level === 3 && l3Loading && (
+              {feedbackLoading && (
                 <div className="muted" style={{ width: '100%' }}>
-                  Checking with Gemini…
+                  Asking Gemini why…
                 </div>
               )}
 
-              {level === 3 && l3Feedback?.note && (
+              {feedback?.note && (
                 <div
-                  className={`alert ${l3Feedback.meaningOk ? 'alert-info' : 'alert-warn'}`}
+                  className={`alert ${feedback.meaningOk ? 'alert-info' : 'alert-warn'}`}
                   style={{ width: '100%', textAlign: 'left' }}
                 >
-                  {l3Feedback.note}
+                  {feedback.note}
                 </div>
               )}
 
-              {level === 3 &&
-                l3Feedback &&
-                (l3Feedback.meaningOk || l3Feedback.newStructure) &&
-                l3Feedback.newWords.length > 0 && (
+              {feedback &&
+                (feedback.meaningOk || feedback.newStructure) &&
+                feedback.newWords.length > 0 && (
                   <div className="stack" style={{ width: '100%', alignItems: 'stretch' }}>
                     <div className="muted" style={{ textAlign: 'left', fontSize: '0.9rem' }}>
                       New words you used:{' '}
-                      {l3Feedback.newWords
+                      {feedback.newWords
                         .map((w) => `${w.hanzi} (${w.english})`)
                         .join(' · ')}
                     </div>
@@ -726,7 +744,7 @@ export function SentenceMakerPage() {
                 type="button"
                 className="btn btn-primary"
                 onClick={() => void nextExercise()}
-                disabled={l3Loading}
+                disabled={feedbackLoading}
               >
                 {index + 1 >= SESSION_SIZE ? 'Finish' : 'Next'}
               </button>
