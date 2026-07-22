@@ -288,17 +288,6 @@ export function LibraryPage() {
 
       {selected && (
         <Modal onClose={closeSelected} className="entry-detail-modal">
-          {!editing && (
-            <div className="entry-modal-edit">
-              <button
-                type="button"
-                className="btn btn-secondary entry-edit-btn"
-                onClick={() => setEditing(true)}
-              >
-                Edit
-              </button>
-            </div>
-          )}
           <div className="entry-modal-speak">
             <SpeakButton hanzi={selected.hanzi} compact />
           </div>
@@ -363,13 +352,22 @@ export function LibraryPage() {
                 >
                   Close
                 </button>
-                <button
-                  type="button"
-                  className="entry-delete-btn"
-                  onClick={() => void deleteSelected()}
-                >
-                  Delete
-                </button>
+                <div className="entry-footer-actions">
+                  <button
+                    type="button"
+                    className="entry-text-btn"
+                    onClick={() => setEditing(true)}
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    className="entry-text-btn entry-delete-btn"
+                    onClick={() => void deleteSelected()}
+                  >
+                    Delete
+                  </button>
+                </div>
               </div>
             </>
           )}

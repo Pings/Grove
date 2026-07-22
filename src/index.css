@@ -381,19 +381,6 @@ select:focus {
   padding-top: 2.4rem;
 }
 
-.entry-modal-edit {
-  position: absolute;
-  top: 0.85rem;
-  left: 0.85rem;
-  z-index: 3;
-}
-
-.entry-edit-btn {
-  min-height: 1.7rem;
-  padding: 0.25rem 0.7rem;
-  font-size: 0.85rem;
-}
-
 .entry-editor {
   margin-top: 0.35rem;
 }
@@ -444,14 +431,20 @@ select:focus {
   font-size: 1.05rem;
 }
 
-.entry-delete-btn {
+.entry-footer-actions {
   position: absolute;
   right: 0;
   top: 50%;
   transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.entry-text-btn {
   border: none;
   background: transparent;
-  color: var(--danger);
+  color: var(--ink-soft);
   font-size: 0.78rem;
   font-weight: 600;
   padding: 0.35rem 0.45rem;
@@ -459,9 +452,13 @@ select:focus {
   opacity: 0.75;
 }
 
-.entry-delete-btn:hover {
+.entry-text-btn:hover {
   opacity: 1;
   text-decoration: underline;
+}
+
+.entry-delete-btn {
+  color: var(--danger);
 }
 
 .chip {
