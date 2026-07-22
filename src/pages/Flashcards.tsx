@@ -6,6 +6,7 @@ import { ExtraDetailPanel } from '../components/ExtraDetailPanel';
 import { CollapsibleSection } from '../components/CollapsibleSection';
 import { Modal } from '../components/Modal';
 import { HskBadge } from '../components/Badges';
+import { ToneContour, tonesFromOptionId } from '../components/ToneContour';
 import {
   applyReview,
   buildMultipleChoice,
@@ -15,6 +16,7 @@ import {
   filterEntriesForMode,
   formatAvgResponse,
   isPerformanceLearned,
+  isToneMode,
   promptFor,
   promptSubtext,
   sandhiNoteFor,
@@ -24,6 +26,16 @@ import {
 } from '../lib/flashcards';
 import { SpeakButton } from '../components/SpeakButton';
 import { getLearnedAvgMs } from '../lib/settings';
+import { pronounceHanzi, stopPronouncing } from '../lib/pronounce';
+import { tonesFromPinyin } from '../lib/pinyin';
+
+const MODES: Array<{ id: CardMode; title: string; hint: string }> = [
+  { id: 'hanzi-to-english', title: 'Hanzi → English', hint: 'Meaning from characters' },
+  { id: 'english-to-hanzi', title: 'English → Hanzi', hint: 'Recall the characters' },
+  { id: 'pinyin-to-hanzi', title: 'Pinyin → Hanzi', hint: 'Match the reading' },
+  { id: 'hanzi-to-tone', title: 'Hanzi → Tone', hint: 'Hear it, pick the contour' },
+  { id: 'measure-words', title: 'Measure Words', hint: '量词 · English → word' },
+];
 
 export function FlashcardsPage() {
   const [entries, setEntries] = useState<VocabEntry[]>([]);
@@ -61,6 +73,7 @@ export function FlashcardsPage() {
   );
 
   const [choices, setChoices] = useState<McOption[]>([]);
+  const toneMode = isToneMode(mode);
 
   // Lock option order per card — don't reshuffle when entries refresh after a click
   useEffect(() => {
@@ -72,6 +85,7 @@ export function FlashcardsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only new card / mode, not DB refresh
   }, [current?.id, mode, index, active]);
 
+  // Timer — skipped for tone drills (listen first, then choose).
   useEffect(() => {
     if (!active || !current || revealed) return;
     settlingRef.current = false;
@@ -79,6 +93,12 @@ export function FlashcardsPage() {
     setShowStudyCard(false);
     setLastOutcome(null);
     cardStartedAtRef.current = Date.now();
+
+    if (toneMode) {
+      setRemainingMs(0);
+      return;
+    }
+
     const started = Date.now();
     const total = current.timerMs || 8000;
     setRemainingMs(total);
@@ -93,6 +113,21 @@ export function FlashcardsPage() {
     return () => window.clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, current?.id, index, revealed, mode]);
+
+  // Auto-play pronunciation for tone mode.
+  useEffect(() => {
+    if (!active || !current?.hanzi || !toneMode || revealed) return;
+    const text = current.hanzi;
+    const timer = window.setTimeout(() => {
+      void pronounceHanzi(text).catch(() => {
+        /* speak is best-effort */
+      });
+    }, 200);
+    return () => {
+      window.clearTimeout(timer);
+      stopPronouncing();
+    };
+  }, [active, current?.id, current?.hanzi, toneMode, revealed, index]);
 
   useEffect(() => {
     if (current) setNotesDraft(current.notes || '');
@@ -116,7 +151,6 @@ export function FlashcardsPage() {
       }
 
       if (!revealed || !lastOutcome) return;
-      // Wrong/timeout with study card pending — Enter continues without opening review.
       e.preventDefault();
       nextCard();
     }
@@ -159,7 +193,6 @@ export function FlashcardsPage() {
 
   function pickOption(option: McOption) {
     if (revealed) {
-      // Second click on the chosen answer (or the correct one after timeout) continues.
       if (option.id === selectedId || (selectedId == null && option.isCorrect)) {
         nextCard();
       }
@@ -193,9 +226,9 @@ export function FlashcardsPage() {
   }
 
   const timerPct = useMemo(() => {
-    if (!current) return 0;
+    if (!current || toneMode) return 0;
     return Math.max(0, Math.min(100, (remainingMs / (current.timerMs || 8000)) * 100));
-  }, [current, remainingMs]);
+  }, [current, remainingMs, toneMode]);
 
   const timerClass = timerPct < 25 ? 'danger' : timerPct < 50 ? 'warn' : '';
   const scoreRight = current?.correctCount ?? 0;
@@ -203,8 +236,9 @@ export function FlashcardsPage() {
   const avgLabel = current ? formatAvgResponse(current) : null;
   const fast = current ? isPerformanceLearned(current, getLearnedAvgMs()) : false;
   const drill = drillModeFor(mode);
-  const sandhiNote = current && mode === 'hanzi-to-tone' ? sandhiNoteFor(current) : null;
+  const sandhiNote = current && toneMode ? sandhiNoteFor(current) : null;
   const poolSize = filterEntriesForMode(entries, mode).length;
+  const citationTones = current && toneMode ? tonesFromPinyin(current.pinyin) : [];
 
   return (
     <div className="stack">
@@ -216,21 +250,22 @@ export function FlashcardsPage() {
       </header>
 
       <section className="panel stack">
-        <div className="row">
-          <label className="field">
-            Mode
-            <select
-              value={mode}
-              onChange={(e) => setMode(e.target.value as CardMode)}
+        <div className="maker-levels tend-modes">
+          {MODES.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className={`maker-level-btn ${mode === item.id ? 'active' : ''}`}
               disabled={active}
+              onClick={() => setMode(item.id)}
             >
-              <option value="hanzi-to-english">Hanzi → English</option>
-              <option value="english-to-hanzi">English → Hanzi</option>
-              <option value="pinyin-to-hanzi">Pinyin → Hanzi</option>
-              <option value="hanzi-to-tone">Hanzi → Tone</option>
-              <option value="measure-words">Measure Words 量词</option>
-            </select>
-          </label>
+              <span className="maker-level-title">{item.title}</span>
+              <span className="maker-level-hint">{item.hint}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="row">
           <button type="button" className="btn btn-primary" onClick={startSession} disabled={active}>
             Start session
           </button>
@@ -243,10 +278,11 @@ export function FlashcardsPage() {
         <div className="muted">
           {mode === 'measure-words'
             ? `Measure words in library: ${poolSize}`
-            : mode === 'hanzi-to-tone'
+            : toneMode
               ? `Tone drills available: ${poolSize}`
               : `Due pool: ${countDueEntries(entries, mode)} words/phrases`}{' '}
-          · Session {sessionStats.correct}✓ {sessionStats.wrong}✗ {sessionStats.timeout}⏱
+          · Session {sessionStats.correct}✓ {sessionStats.wrong}✗
+          {!toneMode && ` ${sessionStats.timeout}⏱`}
         </div>
       </section>
 
@@ -266,8 +302,8 @@ export function FlashcardsPage() {
         queue.length === 0 &&
         sessionStats.correct + sessionStats.wrong + sessionStats.timeout > 0 && (
           <div className="panel alert alert-info">
-            Session done — {sessionStats.correct} correct, {sessionStats.wrong} wrong,{' '}
-            {sessionStats.timeout} timeouts.
+            Session done — {sessionStats.correct} correct, {sessionStats.wrong} wrong
+            {!toneMode && `, ${sessionStats.timeout} timeouts`}.
           </div>
         )}
 
@@ -284,24 +320,35 @@ export function FlashcardsPage() {
               </div>
               {fast && <div className="badge badge-hsk1">Fast recall</div>}
             </div>
-            <div className="timer-track" aria-hidden>
-              <div className={`timer-fill ${timerClass}`} style={{ width: `${timerPct}%` }} />
-            </div>
 
-            <div
-              className={drill !== 'english-to-hanzi' ? 'hanzi-xl' : ''}
-              style={{
-                fontFamily: drill !== 'english-to-hanzi' ? 'var(--font-zh-display)' : undefined,
-                fontSize: drill === 'english-to-hanzi' ? '1.6rem' : undefined,
-              }}
-            >
-              {promptFor(current, mode)}
+            {!toneMode && (
+              <div className="timer-track" aria-hidden>
+                <div className={`timer-fill ${timerClass}`} style={{ width: `${timerPct}%` }} />
+              </div>
+            )}
+
+            <div className="tone-prompt-row">
+              <div
+                className={drill !== 'english-to-hanzi' ? 'hanzi-xl' : ''}
+                style={{
+                  fontFamily: drill !== 'english-to-hanzi' ? 'var(--font-zh-display)' : undefined,
+                  fontSize: drill === 'english-to-hanzi' ? '1.6rem' : undefined,
+                }}
+              >
+                {promptFor(current, mode)}
+              </div>
+              {toneMode && <SpeakButton hanzi={current.hanzi} compact />}
             </div>
             {promptSubtext(current, mode) && (
               <div className="pinyin-lg">{promptSubtext(current, mode)}</div>
             )}
+            {toneMode && !revealed && (
+              <div className="muted" style={{ fontSize: '0.88rem' }}>
+                Listen, then pick the tone contour
+              </div>
+            )}
 
-            <div className="mc-grid">
+            <div className={`mc-grid ${toneMode ? 'mc-grid-tones' : ''}`}>
               {choices.map((option) => {
                 const isSelected = selectedId === option.id;
                 const showResult = revealed;
@@ -313,6 +360,8 @@ export function FlashcardsPage() {
                   else cls += ' mc-dim';
                 }
 
+                const optionTones = toneMode ? tonesFromOptionId(option.id) : null;
+
                 return (
                   <button
                     key={option.id}
@@ -320,6 +369,11 @@ export function FlashcardsPage() {
                     className={cls}
                     onClick={() => pickOption(option)}
                   >
+                    {optionTones && (
+                      <span className="mc-tone-option">
+                        <ToneContour tones={optionTones} size="sm" />
+                      </span>
+                    )}
                     <span
                       className="mc-primary"
                       style={{
@@ -339,10 +393,13 @@ export function FlashcardsPage() {
               })}
             </div>
 
-            {revealed && mode === 'hanzi-to-tone' && (
+            {revealed && toneMode && (
               <div className="tone-reveal muted">
-                <div>
-                  Citation pinyin: <strong>{current.pinyin}</strong>
+                <div className="tone-reveal-visual">
+                  <ToneContour tones={citationTones} size="md" />
+                </div>
+                <div className="pinyin-lg" style={{ marginTop: '0.35rem' }}>
+                  {current.pinyin}
                 </div>
                 {sandhiNote && <div className="tone-sandhi-note">{sandhiNote}</div>}
               </div>
@@ -353,7 +410,7 @@ export function FlashcardsPage() {
                 <button type="button" className="btn btn-primary" onClick={nextCard}>
                   Continue
                 </button>
-                <SpeakButton hanzi={current.hanzi} compact />
+                {!toneMode && <SpeakButton hanzi={current.hanzi} compact />}
               </div>
             )}
 
@@ -369,7 +426,7 @@ export function FlashcardsPage() {
                 >
                   Review card
                 </button>
-                <SpeakButton hanzi={current.hanzi} compact />
+                {!toneMode && <SpeakButton hanzi={current.hanzi} compact />}
               </div>
             )}
           </div>
@@ -394,6 +451,12 @@ export function FlashcardsPage() {
             </div>
             <SpeakButton hanzi={current.hanzi} />
           </div>
+
+          {toneMode && (
+            <div className="tone-reveal-visual" style={{ alignSelf: 'center' }}>
+              <ToneContour tones={tonesFromPinyin(current.pinyin)} size="md" />
+            </div>
+          )}
 
           <div className="row">
             <HskBadge hsk={current.hsk} />

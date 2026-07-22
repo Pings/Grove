@@ -1019,6 +1019,7 @@ select:focus {
 }
 
 .mc-secondary {
+  font-family: var(--font-pinyin);
   font-size: 0.88rem;
   color: var(--accent);
 }
@@ -1233,6 +1234,7 @@ select:focus {
 }
 
 .add-pinyin-display {
+  font-family: var(--font-pinyin);
   color: var(--accent);
   font-size: clamp(1.05rem, 2.5vw, 1.35rem);
   font-weight: 500;
@@ -1496,6 +1498,70 @@ select:focus {
   padding: 0.95rem 1.75rem;
   font-size: 1.08rem;
   font-weight: 700;
+}
+
+.tone-contour {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+}
+
+.tone-contour-svg {
+  display: block;
+  flex-shrink: 0;
+}
+
+.tone-contour-guide {
+  stroke: var(--border);
+  stroke-width: 1;
+  opacity: 0.55;
+}
+
+.tone-contour-stroke {
+  stroke: var(--accent);
+}
+
+.tone-contour-stroke.tone-5 {
+  stroke: var(--ink-faint);
+  stroke-dasharray: 3 2;
+}
+
+.tone-contour-neutral {
+  fill: var(--ink-faint);
+}
+
+.mc-option .tone-contour {
+  margin-bottom: 0.2rem;
+}
+
+.mc-tone-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.tone-prompt-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.tend-modes {
+  grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+}
+
+.tone-reveal-visual {
+  display: flex;
+  justify-content: center;
+  margin-top: 0.35rem;
+}
+
+.mc-grid-tones .mc-option {
+  min-height: 5.5rem;
 }
 
 .flash-continue-row {
@@ -1834,6 +1900,7 @@ select:focus {
 }
 
 .library-drawer-item .pinyin {
+  font-family: var(--font-pinyin);
   color: var(--accent);
   font-size: 0.85rem;
   margin-top: 0.1rem;
@@ -1910,6 +1977,7 @@ select:focus {
 }
 
 .count-digit-py {
+  font-family: var(--font-pinyin);
   font-size: 0.62rem;
   color: var(--accent);
   line-height: 1.1;
