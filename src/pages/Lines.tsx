@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { liveQuery } from 'dexie';
 import { db } from '../db/schema';
-import { TOPICS, type HskLevel, type Topic, type VocabEntry } from '../types';
+import type { HskLevel, Topic, VocabEntry } from '../types';
 import { HskBadge, TopicChips } from '../components/Badges';
+import { EntryEditor } from '../components/EntryEditor';
 import { ExtraDetailPanel } from '../components/ExtraDetailPanel';
 import { CollapsibleSection } from '../components/CollapsibleSection';
 import { Modal } from '../components/Modal';
@@ -18,6 +19,7 @@ export function LinesPage() {
   const [topics, setTopics] = useState<Set<Topic>>(new Set());
   const [hsk, setHsk] = useState<HskLevel | 'all'>('all');
   const [selected, setSelected] = useState<VocabEntry | null>(null);
+  const [editing, setEditing] = useState(false);
   const [notesDraft, setNotesDraft] = useState('');
 
   useEffect(() => {
@@ -42,8 +44,23 @@ export function LinesPage() {
   }, []);
 
   useEffect(() => {
-    if (selected) setNotesDraft(selected.notes);
+    if (selected) {
+      setNotesDraft(selected.notes);
+      setEditing(false);
+    }
   }, [selected?.id]);
+
+  useEffect(() => {
+    setSelected((prev) => {
+      if (!prev?.id) return prev;
+      const fresh = entries.find((e) => e.id === prev.id);
+      if (!fresh) {
+        setEditing(false);
+        return null;
+      }
+      return fresh;
+    });
+  }, [entries]);
 
   useEffect(() => {
     if (!selected?.id) return;
@@ -64,13 +81,25 @@ export function LinesPage() {
     });
   }, [entries, query, topics, hsk]);
 
+  /** Only topics that have at least one line. */
   const allTopics = useMemo(() => {
-    const set = new Set<string>([...TOPICS]);
+    const set = new Set<string>();
     for (const e of entries) {
-      for (const t of e.topics) set.add(t);
+      for (const t of e.topics) {
+        if (t.trim()) set.add(t);
+      }
     }
     return [...set].sort((a, b) => a.localeCompare(b));
   }, [entries]);
+
+  useEffect(() => {
+    setTopics((prev) => {
+      if (prev.size === 0) return prev;
+      const next = new Set([...prev].filter((t) => allTopics.includes(t)));
+      if (next.size === prev.size) return prev;
+      return next;
+    });
+  }, [allTopics]);
 
   function toggleTopic(topic: Topic) {
     setTopics((prev) => {
@@ -86,6 +115,21 @@ export function LinesPage() {
     if (!confirm(`Delete “${selected.hanzi}”?`)) return;
     await db.entries.delete(selected.id);
     setSelected(null);
+    setEditing(false);
+  }
+
+  async function saveSelected(patch: {
+    hanzi: string;
+    pinyin: string;
+    english: string;
+    type: VocabEntry['type'];
+    hsk: HskLevel;
+    topics: Topic[];
+  }) {
+    if (!selected?.id) return;
+    await db.entries.update(selected.id, { ...patch, updatedAt: Date.now() });
+    setSelected({ ...selected, ...patch });
+    setEditing(false);
   }
 
   return (
@@ -111,12 +155,14 @@ export function LinesPage() {
           />
         </label>
 
-        <div>
-          <div className="muted" style={{ marginBottom: '0.45rem', fontSize: '0.85rem', fontWeight: 600 }}>
-            Topics
+        {allTopics.length > 0 && (
+          <div>
+            <div className="muted" style={{ marginBottom: '0.45rem', fontSize: '0.85rem', fontWeight: 600 }}>
+              Topics
+            </div>
+            <TopicChips topics={allTopics} active={topics} onToggle={toggleTopic} />
           </div>
-          <TopicChips topics={allTopics} active={topics} onToggle={toggleTopic} />
-        </div>
+        )}
 
         <div className="row">
           <span className="muted" style={{ fontSize: '0.85rem', fontWeight: 600 }}>
@@ -172,57 +218,90 @@ export function LinesPage() {
       )}
 
       {selected && (
-        <Modal onClose={() => setSelected(null)} className="entry-detail-modal">
+        <Modal
+          onClose={() => {
+            setSelected(null);
+            setEditing(false);
+          }}
+          className="entry-detail-modal"
+        >
+          {!editing && (
+            <div className="entry-modal-edit">
+              <button
+                type="button"
+                className="btn btn-secondary entry-edit-btn"
+                onClick={() => setEditing(true)}
+              >
+                Edit
+              </button>
+            </div>
+          )}
           <div className="entry-modal-speak">
             <SpeakButton hanzi={selected.hanzi} compact />
           </div>
-          <div className="entry-lemma">
-            <div className="hanzi-xl hanzi-xl-sentence">{selected.hanzi}</div>
-            <div className="pinyin-lg">{selected.pinyin}</div>
-            <div className="english-lg">{selected.english}</div>
-          </div>
-          <div className="row">
-            <HskBadge hsk={selected.hsk} />
-            <span className="badge">sentence</span>
-            {selected.topics.map((t) => (
-              <span key={t} className="chip chip-static">
-                {t}
-              </span>
-            ))}
-          </div>
 
-          <ExtraDetailPanel
-            entry={selected}
-            onUpdated={(patch) => setSelected({ ...selected, ...patch })}
-          />
+          {editing ? (
+            <EntryEditor
+              entry={selected}
+              knownTopics={allTopics}
+              lockSentence
+              onSave={saveSelected}
+              onCancel={() => setEditing(false)}
+            />
+          ) : (
+            <>
+              <div className="entry-lemma">
+                <div className="hanzi-xl hanzi-xl-sentence">{selected.hanzi}</div>
+                <div className="pinyin-lg">{selected.pinyin}</div>
+                <div className="english-lg">{selected.english}</div>
+              </div>
+              <div className="row">
+                <HskBadge hsk={selected.hsk} />
+                <span className="badge">sentence</span>
+                {selected.topics.map((t) => (
+                  <span key={t} className="chip chip-static">
+                    {t}
+                  </span>
+                ))}
+              </div>
 
-          <CollapsibleSection title="Your notes" hasContent={Boolean(notesDraft.trim())}>
-            <label className="field">
-              <span className="sr-only">Your notes</span>
-              <textarea
-                value={notesDraft}
-                onChange={(e) => setNotesDraft(e.target.value)}
-                placeholder="Personal reminders…"
+              <ExtraDetailPanel
+                entry={selected}
+                onUpdated={(patch) => setSelected({ ...selected, ...patch })}
               />
-            </label>
-          </CollapsibleSection>
 
-          <div className="entry-modal-footer">
-            <button
-              type="button"
-              className="btn btn-primary entry-close-btn"
-              onClick={() => setSelected(null)}
-            >
-              Close
-            </button>
-            <button
-              type="button"
-              className="entry-delete-btn"
-              onClick={() => void deleteSelected()}
-            >
-              Delete
-            </button>
-          </div>
+              <CollapsibleSection title="Your notes" hasContent={Boolean(notesDraft.trim())}>
+                <label className="field">
+                  <span className="sr-only">Your notes</span>
+                  <textarea
+                    value={notesDraft}
+                    onChange={(e) => setNotesDraft(e.target.value)}
+                    placeholder="Personal reminders…"
+                  />
+                </label>
+              </CollapsibleSection>
+
+              <div className="entry-modal-footer">
+                <button
+                  type="button"
+                  className="btn btn-primary entry-close-btn"
+                  onClick={() => {
+                    setSelected(null);
+                    setEditing(false);
+                  }}
+                >
+                  Close
+                </button>
+                <button
+                  type="button"
+                  className="entry-delete-btn"
+                  onClick={() => void deleteSelected()}
+                >
+                  Delete
+                </button>
+              </div>
+            </>
+          )}
         </Modal>
       )}
     </div>

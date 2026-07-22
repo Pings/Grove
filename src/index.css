@@ -381,6 +381,32 @@ select:focus {
   padding-top: 2.4rem;
 }
 
+.entry-modal-edit {
+  position: absolute;
+  top: 0.85rem;
+  left: 0.85rem;
+  z-index: 3;
+}
+
+.entry-edit-btn {
+  min-height: 1.7rem;
+  padding: 0.25rem 0.7rem;
+  font-size: 0.85rem;
+}
+
+.entry-editor {
+  margin-top: 0.35rem;
+}
+
+.entry-editor-meta {
+  align-items: flex-end;
+}
+
+.entry-editor-meta .field {
+  flex: 1;
+  min-width: 7rem;
+}
+
 .entry-modal-speak {
   position: absolute;
   top: 0.85rem;
