@@ -98,6 +98,33 @@ export function FlashcardsPage() {
     if (current) setNotesDraft(current.notes || '');
   }, [current?.id, current?.notes]);
 
+  // Enter advances after a reveal (or closes the study card).
+  useEffect(() => {
+    if (!active) return;
+
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== 'Enter' || e.isComposing || e.repeat) return;
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      if (tag === 'TEXTAREA' || tag === 'INPUT') return;
+
+      if (showStudyCard) {
+        e.preventDefault();
+        void saveUserNotes();
+        setShowStudyCard(false);
+        nextCard();
+        return;
+      }
+
+      if (!revealed || !lastOutcome) return;
+      // Wrong/timeout with study card pending — Enter continues without opening review.
+      e.preventDefault();
+      nextCard();
+    }
+
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [active, revealed, lastOutcome, showStudyCard, index, queue.length]);
+
   function startSession() {
     const due = buildSessionQueue(entries, 25, mode);
     setQueue(due);

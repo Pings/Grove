@@ -64,6 +64,29 @@ export function CountPage() {
     [stats.correct, stats.wrong],
   );
 
+  // Enter: submit typed answer; Enter again: next question.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== 'Enter' || e.isComposing || e.repeat) return;
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      if (tag === 'TEXTAREA') return;
+
+      if (revealed) {
+        e.preventDefault();
+        loadNext();
+        return;
+      }
+
+      if (style === 'type' && answer.trim()) {
+        e.preventDefault();
+        submit(answer);
+      }
+    }
+
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [revealed, style, answer, mode, prompt.id]);
+
   return (
     <div className="stack count-page">
       <header className="page-header">
@@ -140,12 +163,6 @@ export function CountPage() {
                 type="text"
                 value={answer}
                 onChange={(e) => setAnswer(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && answer.trim() && !revealed) {
-                    e.preventDefault();
-                    submit(answer);
-                  }
-                }}
                 placeholder="Type in Chinese…"
                 disabled={revealed}
                 style={{ fontFamily: 'var(--font-zh-display)', fontSize: '1.35rem' }}

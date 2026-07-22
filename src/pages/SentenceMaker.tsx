@@ -514,6 +514,51 @@ export function SentenceMakerPage() {
   const sessionDone =
     !active && sessionStats.correct + sessionStats.wrong > 0;
 
+  // Enter: submit when ready; Enter again: next question.
+  useEffect(() => {
+    if (!active || !exercise) return;
+    const current = exercise;
+
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== 'Enter' || e.isComposing || e.repeat) return;
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
+      // Allow Enter from inputs (submit) and when not typing in a textarea.
+      if (tag === 'TEXTAREA') return;
+
+      if (revealed) {
+        if (feedbackLoading) return;
+        e.preventDefault();
+        void nextExercise();
+        return;
+      }
+
+      if (level === 1) {
+        const ready = current.blanks.every((b) => Boolean(blankAnswers[b.id]));
+        if (!ready) return;
+        e.preventDefault();
+        checkBlanks();
+        return;
+      }
+
+      if (!typedSentence.trim()) return;
+      e.preventDefault();
+      void checkTyped();
+    }
+
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [
+    active,
+    exercise,
+    revealed,
+    feedbackLoading,
+    level,
+    blankAnswers,
+    typedSentence,
+    index,
+  ]);
+
   return (
     <div className="stack">
       <header className="page-header">
@@ -650,12 +695,6 @@ export function SentenceMakerPage() {
                   type="text"
                   value={typedSentence}
                   onChange={(e) => setTypedSentence(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !revealed && typedSentence.trim()) {
-                      e.preventDefault();
-                      void checkTyped();
-                    }
-                  }}
                   placeholder={
                     level === 2 ? 'Type the sentence you added…' : 'Type the new sentence…'
                   }
