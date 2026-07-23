@@ -44,7 +44,7 @@ function renderSegments(
   return segments.map((seg, idx) => {
     if (seg.kind === 'text') {
       return (
-        <span key={`t-${idx}`} style={{ fontFamily: 'var(--font-zh-display)' }}>
+        <span key={`t-${idx}`} style={{ fontFamily: 'var(--font-zh)' }}>
           {seg.value}
         </span>
       );
@@ -662,7 +662,7 @@ export function SentenceMakerPage() {
                       className={`chip ${used ? 'used' : ''}`}
                       disabled={revealed || used}
                       onClick={() => pickChip(chip)}
-                      style={{ fontFamily: 'var(--font-zh-display)' }}
+                      style={{ fontFamily: 'var(--font-zh)' }}
                     >
                       {chip.hanzi}
                     </button>
@@ -699,7 +699,7 @@ export function SentenceMakerPage() {
                     level === 2 ? 'Type the sentence you added…' : 'Type the new sentence…'
                   }
                   disabled={revealed}
-                  style={{ fontFamily: 'var(--font-zh-display)', fontSize: '1.35rem' }}
+                  style={{ fontFamily: 'var(--font-zh)', fontSize: '1.35rem', fontWeight: 400 }}
                   autoComplete="off"
                 />
               </label>

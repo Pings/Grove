@@ -165,7 +165,7 @@ export function CountPage() {
                 onChange={(e) => setAnswer(e.target.value)}
                 placeholder="Type in Chinese…"
                 disabled={revealed}
-                style={{ fontFamily: 'var(--font-zh-display)', fontSize: '1.35rem' }}
+                style={{ fontFamily: 'var(--font-zh)', fontSize: '1.35rem', fontWeight: 400 }}
                 autoComplete="off"
                 autoFocus
               />
@@ -192,7 +192,7 @@ export function CountPage() {
                 className="mc-option"
                 onClick={() => submit(choice)}
               >
-                <span className="mc-primary" style={{ fontFamily: 'var(--font-zh-display)', fontWeight: 400 }}>
+                <span className="mc-primary" style={{ fontFamily: 'var(--font-zh)', fontWeight: 400 }}>
                   {choice}
                 </span>
               </button>
@@ -222,7 +222,7 @@ export function CountPage() {
                   }
                   return (
                     <button key={choice} type="button" className={cls} disabled>
-                      <span className="mc-primary" style={{ fontFamily: 'var(--font-zh-display)', fontWeight: 400 }}>
+                      <span className="mc-primary" style={{ fontFamily: 'var(--font-zh)', fontWeight: 400 }}>
                         {choice}
                       </span>
                     </button>

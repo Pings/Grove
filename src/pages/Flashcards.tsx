@@ -379,7 +379,11 @@ export function FlashcardsPage() {
                       style={{
                         fontFamily:
                           drill === 'english-to-hanzi' || drill === 'pinyin-to-hanzi'
-                            ? 'var(--font-zh-display)'
+                            ? 'var(--font-zh)'
+                            : undefined,
+                        fontWeight:
+                          drill === 'english-to-hanzi' || drill === 'pinyin-to-hanzi'
+                            ? 400
                             : undefined,
                       }}
                     >
