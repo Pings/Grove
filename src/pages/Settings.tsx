@@ -13,21 +13,35 @@ import {
   GEMINI_MODELS,
   getApiKey,
   getGeminiModel,
+  getLastSyncAt,
   getLearnedAvgSeconds,
   getQuizRefreshMeta,
+  getStorageMode,
+  getSyncKey,
+  getSyncUrl,
   MAX_LEARNED_AVG_SECONDS,
   MIN_LEARNED_AVG_SECONDS,
   setApiKey,
   setGeminiModel,
   setLearnedAvgSeconds,
+  setStorageMode,
+  setSyncKey,
+  setSyncUrl,
   type GeminiModelId,
+  type StorageMode,
 } from '../lib/settings';
 import { countAddedSinceLastRefresh, refreshQuizContent } from '../lib/quizRefresh';
+import { pushLocalSnapshot, syncOnBoot, testSyncConnection } from '../lib/sync';
 
 export function SettingsPage() {
   const [apiKey, setApiKeyState] = useState(getApiKey());
   const [model, setModelState] = useState<GeminiModelId>(getGeminiModel());
   const [learnedAvgSec, setLearnedAvgSecState] = useState(getLearnedAvgSeconds);
+  const [storageMode, setStorageModeState] = useState<StorageMode>(getStorageMode);
+  const [syncUrl, setSyncUrlState] = useState(getSyncUrl);
+  const [syncKey, setSyncKeyState] = useState(getSyncKey);
+  const [lastSyncAt, setLastSyncAtState] = useState(getLastSyncAt);
+  const [syncBusy, setSyncBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [addedSinceRefresh, setAddedSinceRefresh] = useState(0);
@@ -58,6 +72,75 @@ export function SettingsPage() {
     clearApiKey();
     setApiKeyState('');
     setMessage('API key cleared.');
+  }
+
+  function saveStorage() {
+    setStorageMode(storageMode);
+    setSyncUrl(syncUrl);
+    setSyncKey(syncKey);
+    setMessage(
+      storageMode === 'sync'
+        ? 'Sync settings saved. Use Test / Sync now to connect.'
+        : 'Using this browser only.',
+    );
+    setError('');
+  }
+
+  async function handleTestSync() {
+    setSyncBusy(true);
+    setError('');
+    setMessage('');
+    try {
+      setStorageMode(storageMode);
+      setSyncUrl(syncUrl);
+      setSyncKey(syncKey);
+      const note = await testSyncConnection();
+      setMessage(note);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not reach sync server.');
+    } finally {
+      setSyncBusy(false);
+    }
+  }
+
+  async function handleSyncNow() {
+    setSyncBusy(true);
+    setError('');
+    setMessage('');
+    try {
+      setStorageMode('sync');
+      setStorageModeState('sync');
+      setSyncUrl(syncUrl);
+      setSyncKey(syncKey);
+      const result = await syncOnBoot();
+      if (result === 'pulled') setMessage('Pulled latest library from the server.');
+      else if (result === 'pushed') setMessage('Uploaded this browser’s library to the server.');
+      else setMessage('Sync skipped.');
+      setLastSyncAtState(getLastSyncAt());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Sync failed.');
+    } finally {
+      setSyncBusy(false);
+    }
+  }
+
+  async function handleForcePush() {
+    setSyncBusy(true);
+    setError('');
+    setMessage('');
+    try {
+      setStorageMode('sync');
+      setStorageModeState('sync');
+      setSyncUrl(syncUrl);
+      setSyncKey(syncKey);
+      await pushLocalSnapshot();
+      setLastSyncAtState(getLastSyncAt());
+      setMessage('Forced upload of this browser’s library.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Upload failed.');
+    } finally {
+      setSyncBusy(false);
+    }
   }
 
   async function handleExport() {
@@ -136,6 +219,7 @@ export function SettingsPage() {
   const lastRefreshLabel = quizMeta
     ? new Date(quizMeta.lastQuizRefreshAt).toLocaleString()
     : 'Never';
+  const lastSyncLabel = lastSyncAt ? new Date(lastSyncAt).toLocaleString() : 'Never';
 
   return (
     <div className="stack">
@@ -193,6 +277,94 @@ export function SettingsPage() {
           <button type="button" className="btn btn-ghost" onClick={removeKey}>
             Clear key
           </button>
+        </div>
+      </section>
+
+      <section className="panel stack">
+        <h2 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: '1.25rem' }}>
+          Library storage
+        </h2>
+        <p className="muted" style={{ margin: 0 }}>
+          By default the word list and quiz questions live in <strong>this browser only</strong>{' '}
+          (IndexedDB). Enable sync to keep a shared copy on your TrueNAS sync server so phone and
+          work stay aligned over Tailscale.
+        </p>
+        <div className="row">
+          <button
+            type="button"
+            className={`chip ${storageMode === 'local' ? 'active' : ''}`}
+            onClick={() => setStorageModeState('local')}
+          >
+            This browser
+          </button>
+          <button
+            type="button"
+            className={`chip ${storageMode === 'sync' ? 'active' : ''}`}
+            onClick={() => setStorageModeState('sync')}
+          >
+            Sync to server
+          </button>
+        </div>
+        {storageMode === 'sync' && (
+          <>
+            <label className="field">
+              Sync server URL
+              <input
+                type="url"
+                value={syncUrl}
+                onChange={(e) => setSyncUrlState(e.target.value)}
+                placeholder="http://100.x.x.x:8090"
+                autoComplete="off"
+              />
+            </label>
+            <label className="field">
+              Sync key (shared secret, 8+ chars)
+              <input
+                type="password"
+                value={syncKey}
+                onChange={(e) => setSyncKeyState(e.target.value)}
+                placeholder="your-private-key"
+                autoComplete="off"
+              />
+            </label>
+            <p className="muted" style={{ margin: 0, fontSize: '0.88rem' }}>
+              Same URL + key on every device. Last sync: {lastSyncLabel}. Edits upload
+              automatically after a short pause.
+            </p>
+          </>
+        )}
+        <div className="row">
+          <button type="button" className="btn btn-secondary" onClick={saveStorage}>
+            Save storage
+          </button>
+          {storageMode === 'sync' && (
+            <>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                disabled={syncBusy}
+                onClick={() => void handleTestSync()}
+              >
+                Test connection
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={syncBusy}
+                onClick={() => void handleSyncNow()}
+              >
+                {syncBusy ? 'Syncing…' : 'Sync now'}
+              </button>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                disabled={syncBusy}
+                onClick={() => void handleForcePush()}
+              >
+                Upload this device
+              </button>
+            </>
+          )}
         </div>
       </section>
 

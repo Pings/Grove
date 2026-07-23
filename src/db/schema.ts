@@ -27,6 +27,19 @@ export class ChineseDB extends Dexie {
 
 export const db = new ChineseDB();
 
+function armSyncHooks() {
+  const kick = () => {
+    void import('../lib/sync').then((m) => m.scheduleSyncPush());
+  };
+  db.entries.hook('creating', kick);
+  db.entries.hook('updating', kick);
+  db.entries.hook('deleting', kick);
+  db.quizQuestions.hook('creating', kick);
+  db.quizQuestions.hook('updating', kick);
+  db.quizQuestions.hook('deleting', kick);
+}
+armSyncHooks();
+
 function normalizeHanzi(hanzi: string): string {
   return hanzi.replace(/\s+/g, '');
 }

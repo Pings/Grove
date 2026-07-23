@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { ensureSeeded } from './db/schema';
+import { isSyncConfigured } from './lib/settings';
+import { syncOnBoot } from './lib/sync';
 
 export default function App() {
   const [ready, setReady] = useState(false);
@@ -9,7 +11,21 @@ export default function App() {
 
   useEffect(() => {
     ensureSeeded()
-      .then(() => setReady(true))
+      .then(async () => {
+        if (isSyncConfigured()) {
+          try {
+            await syncOnBoot();
+          } catch (err) {
+            console.warn('Grove sync on boot failed:', err);
+            setBootError(
+              err instanceof Error
+                ? `Library loaded locally. Sync failed: ${err.message}`
+                : 'Library loaded locally. Sync failed.',
+            );
+          }
+        }
+        setReady(true);
+      })
       .catch((err) => {
         console.error(err);
         setBootError(err instanceof Error ? err.message : 'Failed to start database.');
