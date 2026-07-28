@@ -39,8 +39,24 @@ In Dockge → **grove** stack → **Terminal** (on the host), or SSH:
 
 ```bash
 cd /mnt/tank/apps/dockge/stacks/grove
-./deploy/deploy.sh
+sudo git fetch origin
+sudo git checkout main
+sudo git reset --hard origin/main
+sudo cp docker-compose.yml compose.yaml
+sudo ./deploy/deploy.sh
 ```
+
+Or just `sudo ./deploy/deploy.sh` if you’re already on `main` and only need a pull + rebuild.
+
+**Important:** the stack folder must be the **full git repo** (including `Dockerfile`, `package.json`, `src/`). If Dockge only created an empty stack with `compose.yaml`, overwrite it with a clone of this repo, then `cp docker-compose.yml compose.yaml`.
+
+Check before deploying:
+
+```bash
+sudo ls -la /mnt/tank/apps/dockge/stacks/grove/Dockerfile
+```
+
+If that file is missing, the build will fail with `open Dockerfile: no such file or directory`.
 
 For auto-updates, use a TrueNAS cron job pointing at that same path (see below).
 
