@@ -44,6 +44,64 @@ cd /mnt/tank/apps/dockge/stacks/grove
 
 For auto-updates, use a TrueNAS cron job pointing at that same path (see below).
 
+### Public HTTPS with Cloudflare Tunnel
+
+Use this when you want `https://grove.yourdomain.com` without opening port 8080 on your router. Tailscale access (`http://<truenas-tailscale-ip>:8080`) still works alongside the tunnel.
+
+**1. Create the tunnel in Cloudflare**
+
+1. Log in to [Cloudflare Zero Trust](https://one.dash.cloudflare.com/).
+2. Go to **Networks** → **Tunnels** → **Create a tunnel**.
+3. Choose **Cloudflared**, name it (e.g. `grove-truenas`), and continue.
+4. Copy the **tunnel token** (you only need this once).
+
+**2. Add a public hostname**
+
+Still in the tunnel setup (or **Tunnels** → your tunnel → **Public Hostname**):
+
+| Field | Value |
+|-------|-------|
+| Subdomain | e.g. `grove` |
+| Domain | your domain on Cloudflare |
+| Service type | HTTP |
+| URL | `grove:80` |
+
+`grove:80` is the Docker service name on the compose network — not your TrueNAS IP.
+
+**3. Configure the Dockge stack**
+
+In your stack folder (e.g. `/mnt/tank/apps/dockge/stacks/grove`):
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` and set:
+
+```env
+COMPOSE_PROFILES=cloudflare
+TUNNEL_TOKEN=paste-your-token-here
+```
+
+In Dockge → **grove** stack → ensure the stack loads `.env` (Dockge picks it up from the stack folder automatically). Click **Deploy** (or redeploy) so the `cloudflared` container starts.
+
+**4. Verify**
+
+- Open `https://grove.yourdomain.com` — you should see Grove.
+- In Dockge, both `grove` and `grove-cloudflared` should be running.
+
+**5. Gemini API key (browser)**
+
+If you use Gemini from the public URL, add that origin in [Google AI Studio](https://aistudio.google.com/) under API key restrictions (HTTP referrer), e.g. `https://grove.yourdomain.com/*`.
+
+**Optional — Cloudflare Access**
+
+To require login before Grove loads: Zero Trust → **Access** → **Applications** → add a self-hosted app for `grove.yourdomain.com` and an allow policy (e.g. your email). Useful if the site is on the public internet.
+
+**Turn off the tunnel**
+
+Remove `COMPOSE_PROFILES=cloudflare` from `.env` (or delete `.env`) and redeploy. Grove keeps working on Tailscale port 8080.
+
 ### Option B — CLI (no Dockge)
 
 **1. Clone on TrueNAS**
@@ -95,7 +153,7 @@ Or from the shell, append to root’s crontab (`crontab -e`):
 
 ### Notes
 
-- **Port 8080** is only on your tailnet — no public reverse proxy needed if you use Tailscale on phone/work.
+- **Port 8080** stays on your tailnet for Tailscale; Cloudflare Tunnel does not require forwarding 8080 on your router.
 - **Progress sync**: use Settings → export backup; each browser keeps its own library unless you restore a backup.
 - **Gemini key**: restrict by HTTP referrer in [Google AI Studio](https://aistudio.google.com/) if you want extra safety.
 - **Dockge rebuild**: after `git pull`, you must **rebuild** (Deploy in Dockge or `deploy.sh`) — Dockge does not auto-pull from git on its own.

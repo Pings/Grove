@@ -12,4 +12,7 @@ docker compose build --pull
 docker compose up -d
 
 echo "==> Done. Grove is running on port 8080."
+if [[ -f .env ]] && grep -q '^COMPOSE_PROFILES=.*cloudflare' .env 2>/dev/null; then
+  echo "    Cloudflare Tunnel profile is enabled (grove-cloudflared)."
+fi
 docker compose ps
