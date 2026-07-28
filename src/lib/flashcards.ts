@@ -1,13 +1,51 @@
 import type { VocabEntry } from '../types';
 import { db, DEFAULT_TIMER_MS } from '../db/schema';
 import { isGrowthDemoEntry } from '../data/growthDemos';
+import {
+  formatToneChoice,
+  formatTonePattern,
+  thirdToneSandhi,
+  toneDistractors,
+  tonesFromPinyin,
+} from './pinyin';
 
 const MIN_TIMER_MS = 3000;
 const MAX_TIMER_MS = 12000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const CHOICE_COUNT = 4;
 
-export type CardMode = 'hanzi-to-english' | 'english-to-hanzi' | 'pinyin-to-hanzi';
+export type CardMode =
+  | 'hanzi-to-english'
+  | 'english-to-hanzi'
+  | 'pinyin-to-hanzi'
+  | 'hanzi-to-tone'
+  | 'measure-words';
+
+export function isMeasureWordMode(mode: CardMode): boolean {
+  return mode === 'measure-words';
+}
+
+export function isToneMode(mode: CardMode): boolean {
+  return mode === 'hanzi-to-tone';
+}
+
+/** Underlying drill used for measure-word sessions (English → Hanzi). */
+export function drillModeFor(mode: CardMode): CardMode {
+  if (mode === 'measure-words') return 'english-to-hanzi';
+  return mode;
+}
+
+export function filterEntriesForMode(entries: VocabEntry[], mode: CardMode): VocabEntry[] {
+  const base = entries.filter((e) => e.type !== 'sentence' && !isGrowthDemoEntry(e));
+  if (mode === 'measure-words') {
+    return base.filter((e) => e.topics.includes('Measure Words'));
+  }
+  if (mode === 'hanzi-to-tone') {
+    // Prefer words/phrases with readable pinyin (skip empty / non-hanzi noise).
+    return base.filter((e) => e.type === 'word' && tonesFromPinyin(e.pinyin).length > 0);
+  }
+  return base;
+}
 
 export type ReviewOutcome = 'correct' | 'wrong' | 'timeout';
 
@@ -94,20 +132,19 @@ function shuffle<T>(items: T[]): T[] {
 }
 
 /** Due count for display — not session order. */
-export function countDueEntries(entries: VocabEntry[]): number {
+export function countDueEntries(entries: VocabEntry[], mode: CardMode = 'hanzi-to-english'): number {
   const now = Date.now();
-  return entries.filter(
-    (e) =>
-      e.type !== 'sentence' &&
-      !isGrowthDemoEntry(e) &&
-      (e.nextReviewAt || 0) <= now,
-  ).length;
+  return filterEntriesForMode(entries, mode).filter((e) => (e.nextReviewAt || 0) <= now).length;
 }
 
 /** Randomised session queue: due cards shuffled, topped up with random others, then shuffled again. */
-export function buildSessionQueue(entries: VocabEntry[], limit = 25): VocabEntry[] {
+export function buildSessionQueue(
+  entries: VocabEntry[],
+  limit = 25,
+  mode: CardMode = 'hanzi-to-english',
+): VocabEntry[] {
   const now = Date.now();
-  const eligible = entries.filter((e) => e.type !== 'sentence' && !isGrowthDemoEntry(e));
+  const eligible = filterEntriesForMode(entries, mode);
   const due = eligible.filter((e) => (e.nextReviewAt || 0) <= now);
   const other = eligible.filter((e) => (e.nextReviewAt || 0) > now);
 
@@ -158,29 +195,48 @@ export function isFastRecall(entry: VocabEntry, thresholdMs = DEFAULT_LEARNED_TH
 }
 
 export function promptFor(entry: VocabEntry, mode: CardMode): string {
-  if (mode === 'hanzi-to-english') return entry.hanzi;
-  if (mode === 'english-to-hanzi') return entry.english;
+  const drill = drillModeFor(mode);
+  if (drill === 'hanzi-to-english' || drill === 'hanzi-to-tone') return entry.hanzi;
+  if (drill === 'english-to-hanzi') return entry.english;
   return entry.pinyin;
 }
 
 export function promptSubtext(entry: VocabEntry, mode: CardMode): string | undefined {
-  if (mode === 'hanzi-to-english') return entry.pinyin;
+  const drill = drillModeFor(mode);
+  if (drill === 'hanzi-to-english') return entry.pinyin;
+  if (drill === 'hanzi-to-tone') return undefined; // hide tones — that's the quiz
+  if (mode === 'measure-words') return 'Pick the measure word';
   return undefined;
 }
 
 export function answerFor(entry: VocabEntry, mode: CardMode): { primary: string; secondary?: string } {
-  if (mode === 'hanzi-to-english') return { primary: entry.english };
-  if (mode === 'english-to-hanzi') return { primary: entry.hanzi, secondary: entry.pinyin };
+  const drill = drillModeFor(mode);
+  if (drill === 'hanzi-to-english') return { primary: entry.english };
+  if (drill === 'hanzi-to-tone') {
+    const tones = tonesFromPinyin(entry.pinyin);
+    const choice = formatToneChoice(tones);
+    return { primary: choice.primary, secondary: entry.pinyin };
+  }
+  if (drill === 'english-to-hanzi') return { primary: entry.hanzi, secondary: entry.pinyin };
   return { primary: entry.hanzi, secondary: entry.pinyin };
 }
 
+export function sandhiNoteFor(entry: VocabEntry): string | null {
+  const tones = tonesFromPinyin(entry.pinyin);
+  return thirdToneSandhi(tones).note;
+}
+
 function optionKey(entry: VocabEntry, mode: CardMode): string {
-  if (mode === 'hanzi-to-english') return entry.english.toLowerCase().trim();
+  const drill = drillModeFor(mode);
+  if (drill === 'hanzi-to-english') return entry.english.toLowerCase().trim();
+  if (drill === 'hanzi-to-tone') return formatTonePattern(tonesFromPinyin(entry.pinyin));
   return entry.hanzi.replace(/\s+/g, '');
 }
 
 function answerSurface(entry: VocabEntry, mode: CardMode): string {
-  if (mode === 'hanzi-to-english') return entry.english.trim();
+  const drill = drillModeFor(mode);
+  if (drill === 'hanzi-to-english') return entry.english.trim();
+  if (drill === 'hanzi-to-tone') return formatTonePattern(tonesFromPinyin(entry.pinyin));
   return entry.hanzi.replace(/\s+/g, '');
 }
 
@@ -194,6 +250,7 @@ function englishWordCount(text: string): number {
 /** Higher = better distractor (similar shape to the correct answer). */
 function distractorScore(candidate: VocabEntry, current: VocabEntry, mode: CardMode): number {
   let score = 0;
+  const drill = drillModeFor(mode);
 
   if (candidate.type === current.type) score += 55;
   else if (current.type === 'phrase' && candidate.type === 'word') score -= 35;
@@ -206,7 +263,7 @@ function distractorScore(candidate: VocabEntry, current: VocabEntry, mode: CardM
   const lenRatio = Math.min(lenA, lenB) / Math.max(lenA, lenB);
   score += lenRatio * 45;
 
-  if (mode === 'hanzi-to-english') {
+  if (drill === 'hanzi-to-english') {
     const wA = englishWordCount(a);
     const wB = englishWordCount(b);
     score -= Math.abs(wA - wB) * 18;
@@ -221,6 +278,7 @@ function distractorScore(candidate: VocabEntry, current: VocabEntry, mode: CardM
   }
 
   if (candidate.topics.some((t) => current.topics.includes(t))) score += 12;
+  if (mode === 'measure-words' && candidate.topics.includes('Measure Words')) score += 40;
 
   return score;
 }
@@ -263,10 +321,21 @@ function pickDistractors(
 }
 
 function entryToOption(entry: VocabEntry, mode: CardMode, isCorrect: boolean): McOption {
-  if (mode === 'hanzi-to-english') {
+  const drill = drillModeFor(mode);
+  if (drill === 'hanzi-to-english') {
     return {
       id: String(entry.id ?? entry.hanzi),
       primary: entry.english,
+      isCorrect,
+    };
+  }
+  if (drill === 'hanzi-to-tone') {
+    const tones = tonesFromPinyin(entry.pinyin);
+    const choice = formatToneChoice(tones);
+    return {
+      id: `tone-${formatTonePattern(tones)}`,
+      primary: choice.primary,
+      secondary: choice.secondary,
       isCorrect,
     };
   }
@@ -278,13 +347,45 @@ function entryToOption(entry: VocabEntry, mode: CardMode, isCorrect: boolean): M
   };
 }
 
+function buildToneChoices(current: VocabEntry, count = CHOICE_COUNT): McOption[] {
+  const correct = tonesFromPinyin(current.pinyin);
+  if (correct.length === 0) {
+    return [{ id: 'tone-none', primary: '—', isCorrect: true }];
+  }
+  const choice = formatToneChoice(correct);
+  const options: McOption[] = [
+    {
+      id: `tone-${formatTonePattern(correct)}`,
+      primary: choice.primary,
+      secondary: choice.secondary,
+      isCorrect: true,
+    },
+  ];
+  for (const wrong of toneDistractors(correct, Math.max(0, count - 1))) {
+    const c = formatToneChoice(wrong);
+    options.push({
+      id: `tone-${formatTonePattern(wrong)}`,
+      primary: c.primary,
+      secondary: c.secondary,
+      isCorrect: false,
+    });
+  }
+  return shuffle(options.slice(0, count));
+}
+
 export function buildMultipleChoice(
   current: VocabEntry,
   pool: VocabEntry[],
   mode: CardMode,
   count = CHOICE_COUNT,
 ): McOption[] {
-  const distractors = pickDistractors(current, pool, mode, Math.max(0, count - 1));
+  if (mode === 'hanzi-to-tone') {
+    return buildToneChoices(current, count);
+  }
+
+  const distractorPool =
+    mode === 'measure-words' ? filterEntriesForMode(pool, 'measure-words') : pool;
+  const distractors = pickDistractors(current, distractorPool, mode, Math.max(0, count - 1));
   const options = [
     entryToOption(current, mode, true),
     ...distractors.map((e) => entryToOption(e, mode, false)),

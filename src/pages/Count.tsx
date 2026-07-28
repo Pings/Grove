@@ -13,6 +13,7 @@ const MODES: Array<{ id: CountMode; title: string; hint: string }> = [
   { id: 'digits', title: 'Digits', hint: '0–99 in characters' },
   { id: 'dates', title: 'Dates', hint: 'Years, months, days, weekdays' },
   { id: 'times', title: 'Times', hint: '…点…分 / 半' },
+  { id: 'dayparts', title: 'Time of day', hint: '早上 / 下午 + clock' },
   { id: 'phone', title: 'Phone', hint: 'Digit by digit' },
 ];
 
@@ -63,13 +64,36 @@ export function CountPage() {
     [stats.correct, stats.wrong],
   );
 
+  // Enter: submit typed answer; Enter again: next question.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== 'Enter' || e.isComposing || e.repeat) return;
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      if (tag === 'TEXTAREA') return;
+
+      if (revealed) {
+        e.preventDefault();
+        loadNext();
+        return;
+      }
+
+      if (style === 'type' && answer.trim()) {
+        e.preventDefault();
+        submit(answer);
+      }
+    }
+
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [revealed, style, answer, mode, prompt.id]);
+
   return (
     <div className="stack count-page">
       <header className="page-header">
         <h1>
           Count <span className="page-title-zh">数</span>
         </h1>
-        <p>Keep 1–10 in view while you drill dates (with years), times, and phone numbers.</p>
+        <p>Keep 1–10 in view while you drill dates, clock times, time of day, and phone numbers.</p>
       </header>
 
       <section className="count-strip" aria-label="Numbers 0 to 10">
@@ -139,15 +163,9 @@ export function CountPage() {
                 type="text"
                 value={answer}
                 onChange={(e) => setAnswer(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && answer.trim() && !revealed) {
-                    e.preventDefault();
-                    submit(answer);
-                  }
-                }}
                 placeholder="Type in Chinese…"
                 disabled={revealed}
-                style={{ fontFamily: 'var(--font-zh)', fontSize: '1.35rem' }}
+                style={{ fontFamily: 'var(--font-zh)', fontSize: '1.35rem', fontWeight: 400 }}
                 autoComplete="off"
                 autoFocus
               />
@@ -174,7 +192,7 @@ export function CountPage() {
                 className="mc-option"
                 onClick={() => submit(choice)}
               >
-                <span className="mc-primary" style={{ fontFamily: 'var(--font-zh)' }}>
+                <span className="mc-primary" style={{ fontFamily: 'var(--font-zh)', fontWeight: 400 }}>
                   {choice}
                 </span>
               </button>
@@ -204,7 +222,7 @@ export function CountPage() {
                   }
                   return (
                     <button key={choice} type="button" className={cls} disabled>
-                      <span className="mc-primary" style={{ fontFamily: 'var(--font-zh)' }}>
+                      <span className="mc-primary" style={{ fontFamily: 'var(--font-zh)', fontWeight: 400 }}>
                         {choice}
                       </span>
                     </button>

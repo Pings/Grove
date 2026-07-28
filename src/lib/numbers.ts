@@ -18,7 +18,7 @@ const DIGIT_CHARS = ['零', '一', '二', '三', '四', '五', '六', '七', '�
 /** Phone-style reading: 1 → 幺 (common on the mainland for clarity). */
 const PHONE_DIGIT_CHARS = ['零', '幺', '二', '三', '四', '五', '六', '七', '八', '九'] as const;
 
-export type CountMode = 'digits' | 'dates' | 'times' | 'phone';
+export type CountMode = 'digits' | 'dates' | 'times' | 'dayparts' | 'phone';
 
 export type CountPrompt = {
   id: string;
@@ -223,6 +223,63 @@ function makeTimePrompt(): CountPrompt {
   };
 }
 
+/** Parts of the day + clock times with 早上/上午/下午/晚上. */
+const DAY_PARTS: Array<{
+  en: string;
+  zh: string;
+  alts?: string[];
+  /** Clock hours this part usually covers (1–12 dial). */
+  hours?: number[];
+}> = [
+  { en: 'early morning', zh: '早上', alts: ['早晨'], hours: [5, 6, 7, 8] },
+  { en: 'morning', zh: '上午', hours: [8, 9, 10, 11] },
+  { en: 'noon', zh: '中午', hours: [12] },
+  { en: 'afternoon', zh: '下午', hours: [1, 2, 3, 4, 5, 6] },
+  { en: 'evening', zh: '晚上', hours: [6, 7, 8, 9, 10] },
+  { en: 'night / late night', zh: '夜里', alts: ['夜晚'], hours: [10, 11, 12] },
+  { en: 'midnight', zh: '半夜', alts: ['午夜'] },
+];
+
+function makeDaypartPrompt(): CountPrompt {
+  // Pure vocabulary ~40%
+  if (Math.random() < 0.4) {
+    const part = pick(DAY_PARTS);
+    return {
+      id: `daypart-${part.zh}-${Math.random().toString(36).slice(2, 7)}`,
+      mode: 'dayparts',
+      prompt: part.en,
+      answers: [part.zh, ...(part.alts ?? [])],
+      reveal: part.zh,
+      hint: 'Time of day',
+    };
+  }
+
+  // Combined: afternoon 3:30 → 下午三点半
+  const part = pick(DAY_PARTS.filter((p) => p.hours && p.hours.length > 0));
+  const hour = pick(part.hours!);
+  const minute = pick([0, 15, 30, 45]);
+  const clockZh = formatTimeHanzi(hour, minute);
+  const zh = `${part.zh}${clockZh}`;
+  const answers = [zh];
+  if (part.alts) {
+    for (const alt of part.alts) answers.push(`${alt}${clockZh}`);
+  }
+  // Accept clock-only as wrong? No — require the day part for this mode.
+  // Also accept 上午/早上 swap for overlapping morning hours when prompt says morning-ish.
+  if (part.zh === '早上') answers.push(`上午${clockZh}`);
+  if (part.zh === '上午' && hour <= 8) answers.push(`早上${clockZh}`);
+
+  const mm = String(minute).padStart(2, '0');
+  return {
+    id: `daypart-time-${part.zh}-${hour}-${minute}-${Math.random().toString(36).slice(2, 7)}`,
+    mode: 'dayparts',
+    prompt: `${part.en} · ${hour}:${mm}`,
+    answers,
+    reveal: zh,
+    hint: '早上/上午/下午/晚上 + …点…',
+  };
+}
+
 function makePhonePrompt(): CountPrompt {
   const len = pick([7, 8, 11] as const);
   let digits = '';
@@ -276,6 +333,8 @@ export function makeCountPrompt(mode: CountMode): CountPrompt {
       return makeDatePrompt();
     case 'times':
       return makeTimePrompt();
+    case 'dayparts':
+      return makeDaypartPrompt();
     case 'phone':
       return makePhonePrompt();
   }

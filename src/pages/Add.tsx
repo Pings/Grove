@@ -215,7 +215,6 @@ export function AddPage() {
     }
 
     for (const item of toSave) {
-      const tip = item.notes.trim();
       await upsertEntry({
         hanzi: item.hanzi.trim(),
         pinyin: toPinyin(item.hanzi.trim()),
@@ -224,7 +223,6 @@ export function AddPage() {
         topics: item.topics.length ? item.topics : ['Other'],
         hsk: item.hsk,
         notes: '',
-        extraDetail: tip || undefined,
         status: 'learning',
       });
     }
@@ -446,17 +444,6 @@ export function AddPage() {
                     </button>
                   )}
                 </div>
-
-                <label className="field add-notes-field">
-                  Grammar tip (optional — punchy one-liner)
-                  <textarea
-                    value={draft.notes}
-                    onChange={(e) => updateDraft(draft.key, { notes: e.target.value })}
-                    rows={2}
-                    placeholder="Optional tip before save"
-                    disabled={duplicate}
-                  />
-                </label>
               </div>
             );
           })}

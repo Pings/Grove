@@ -4,41 +4,46 @@ Grow your Chinese in a quiet garden of words.
 
 Local Vite + React learning app (HSK-focused): Shelf, Gather, Tend, Temper, Forms.
 
-## Deploy on TrueNAS (Docker + Tailscale)
+## Where data lives
 
-Grove is a static site — no backend. Data lives in each browser (IndexedDB). Access over your tailnet at `http://<truenas-tailscale-ip>:8080`.
+| Data | Default | Optional |
+|------|---------|----------|
+| Word list (Shelf / Lines) | Browser IndexedDB | Sync server |
+| Quiz questions (Forms) | Browser IndexedDB | Sync server |
+| Gemini API key & settings | Browser localStorage | Always local |
 
-### Option A — Dockge (recommended if you use it)
+**This browser** — each phone/laptop keeps its own copy (export/import JSON to move).
 
-Dockge manages compose stacks from a **stacks folder**. Find yours in TrueNAS → **Apps** → **Dockge** → edit → **Storage** (often `/mnt/tank/apps/dockge/stacks`).
+**Sync to server** — Settings → Library storage → run the sync container, then enter its URL + a shared sync key on every device.
+
+## Deploy on TrueNAS (Dockge)
+
+Dockge manages compose stacks from a **stacks folder**. Find yours in TrueNAS → **Apps** → **Dockge** → edit → **Storage** (e.g. `/mnt/Maru/Apps/Dockge/stacks`).
 
 **1. Clone into the Dockge stacks path**
 
-SSH or TrueNAS shell (replace the path with your Dockge stacks dataset):
-
 ```bash
-cd /mnt/tank/apps/dockge/stacks
-git clone https://github.com/Pings/Grove.git grove
+cd /mnt/Maru/Apps/Dockge/stacks
+sudo git clone https://github.com/Pings/Grove.git grove
+cd grove
+sudo cp docker-compose.yml compose.yaml
 ```
 
-**2. Create the stack in Dockge**
+**2. Deploy in Dockge**
 
-1. Open Dockge (**Apps** → **Dockge** → **Web UI**).
-2. Click **+ Compose** (or **New Stack**).
-3. Stack name: `grove` (must match the folder name if Dockge created it, or point at the `grove` folder).
-4. Dockge should load `compose.yaml` / `docker-compose.yml` from that folder. If the editor is empty, paste the contents of `docker-compose.yml` from the repo.
-5. Click **Deploy** (first build takes a few minutes).
+1. Open Dockge → **grove** (or **Scan Stacks Folder**).
+2. Confirm `compose.yaml` loaded (full repo must include `Dockerfile`, `package.json`, `src/`).
+3. **Deploy** (first build takes a few minutes).
 
 **3. Open the app**
 
-On a device with Tailscale: `http://<truenas-tailscale-ip>:8080`
+- Tailscale / LAN: `http://<truenas-ip>:8080` (or whatever host port you set, e.g. `8081`)
+- Sync API: `http://<truenas-ip>:8090`
 
 **4. Update from git**
 
-In Dockge → **grove** stack → **Terminal** (on the host), or SSH:
-
 ```bash
-cd /mnt/tank/apps/dockge/stacks/grove
+cd /mnt/Maru/Apps/Dockge/stacks/grove
 sudo git fetch origin
 sudo git checkout main
 sudo git reset --hard origin/main
@@ -46,130 +51,46 @@ sudo cp docker-compose.yml compose.yaml
 sudo ./deploy/deploy.sh
 ```
 
-Or just `sudo ./deploy/deploy.sh` if you’re already on `main` and only need a pull + rebuild.
+Then Dockge → **Deploy** if needed. Dockge does **not** `git pull` for you.
 
-**Important:** the stack folder must be the **full git repo** (including `Dockerfile`, `package.json`, `src/`). If Dockge only created an empty stack with `compose.yaml`, overwrite it with a clone of this repo, then `cp docker-compose.yml compose.yaml`.
-
-Check before deploying:
-
-```bash
-sudo ls -la /mnt/tank/apps/dockge/stacks/grove/Dockerfile
-```
-
-If that file is missing, the build will fail with `open Dockerfile: no such file or directory`.
-
-For auto-updates, use a TrueNAS cron job pointing at that same path (see below).
+**Important:** the stack folder must be the **full git repo**. If Dockge only has `compose.yaml`, re-clone into that folder.
 
 ### Public HTTPS with Cloudflare Tunnel
 
-Use this when you want `https://grove.yourdomain.com` without opening port 8080 on your router. Tailscale access (`http://<truenas-tailscale-ip>:8080`) still works alongside the tunnel.
+**1.** Cloudflare Zero Trust → **Networks** → **Tunnels** → create tunnel → copy token.
 
-**1. Create the tunnel in Cloudflare**
+**2.** Public hostname: your domain → HTTP → `grove:80` (Docker service name, not the host port).
 
-1. Log in to [Cloudflare Zero Trust](https://one.dash.cloudflare.com/).
-2. Go to **Networks** → **Tunnels** → **Create a tunnel**.
-3. Choose **Cloudflared**, name it (e.g. `grove-truenas`), and continue.
-4. Copy the **tunnel token** (you only need this once).
-
-**2. Add a public hostname**
-
-Still in the tunnel setup (or **Tunnels** → your tunnel → **Public Hostname**):
-
-| Field | Value |
-|-------|-------|
-| Subdomain | e.g. `grove` |
-| Domain | your domain on Cloudflare |
-| Service type | HTTP |
-| URL | `grove:80` |
-
-`grove:80` is the Docker service name on the compose network — not your TrueNAS IP.
-
-**3. Configure the Dockge stack**
-
-In your stack folder (e.g. `/mnt/tank/apps/dockge/stacks/grove`):
-
-```bash
-cp .env.example .env
-```
-
-Edit `.env` and set:
+**3.** Stack `.env` (Dockge env editor — one file for the whole stack):
 
 ```env
-COMPOSE_PROFILES=cloudflare
 TUNNEL_TOKEN=paste-your-token-here
 ```
 
-In Dockge → **grove** stack → ensure the stack loads `.env` (Dockge picks it up from the stack folder automatically). Click **Deploy** (or redeploy) so the `cloudflared` container starts.
+Simplest: remove the `profiles: [cloudflare]` block from `cloudflared` in compose so it always starts with the stack (as many Dockge setups do). Or set `COMPOSE_PROFILES=cloudflare` in `.env`.
 
-**4. Verify**
+**4.** Redeploy. You should see `grove`, `grove-sync`, and `grove-cloudflared`.
 
-- Open `https://grove.yourdomain.com` — you should see Grove.
-- In Dockge, both `grove` and `grove-cloudflared` should be running.
+Do **not** put `COMPOSE_PROFILES` or the token on the `grove` service — only on `.env` / `cloudflared`.
 
-**5. Gemini API key (browser)**
+### Sync across devices
 
-If you use Gemini from the public URL, add that origin in [Google AI Studio](https://aistudio.google.com/) under API key restrictions (HTTP referrer), e.g. `https://grove.yourdomain.com/*`.
+In Grove → **Settings** → **Library storage** → **Sync to server**:
 
-**Optional — Cloudflare Access**
+- URL: `http://<truenas-ip>:8090` (or a Tailscale IP; keep sync off the public tunnel unless you add auth)
+- Sync key: any private string (≥ 8 characters), same on all devices
+- **Test connection** → **Sync now**
 
-To require login before Grove loads: Zero Trust → **Access** → **Applications** → add a self-hosted app for `grove.yourdomain.com` and an allow policy (e.g. your email). Useful if the site is on the public internet.
+### Auto-pull (optional)
 
-**Turn off the tunnel**
-
-Remove `COMPOSE_PROFILES=cloudflare` from `.env` (or delete `.env`) and redeploy. Grove keeps working on Tailscale port 8080.
-
-### Option B — CLI (no Dockge)
-
-**1. Clone on TrueNAS**
-
-SSH into TrueNAS (or open the shell) and pick a dataset path, e.g. `/mnt/tank/apps`:
+TrueNAS cron as `root`:
 
 ```bash
-mkdir -p /mnt/tank/apps
-cd /mnt/tank/apps
-git clone https://github.com/Pings/Grove.git grove
-cd grove
-```
-
-**2. Build and start**
-
-```bash
-docker compose up -d --build
-```
-
-Open `http://<truenas-tailscale-ip>:8080` from a device on your tailnet. Enter your Gemini API key in **Settings** on each browser/device.
-
-### Pull updates manually
-
-From the repo directory (adjust path for Dockge vs CLI):
-
-```bash
-./deploy/deploy.sh
-```
-
-This runs `git pull`, rebuilds the image, and restarts the container.
-
-### Auto-pull on a schedule (optional)
-
-On TrueNAS SCALE, add a **Cron Job** (System Settings → Advanced → Cron Jobs):
-
-| Field | Value |
-|-------|-------|
-| Command | `/mnt/tank/apps/dockge/stacks/grove/deploy/deploy.sh >> /mnt/tank/apps/dockge/stacks/grove/deploy.log 2>&1` |
-| Schedule | e.g. daily at 3:00 AM, or every 6 hours |
-| User | `root` |
-
-(Use `/mnt/tank/apps/grove/...` instead if you deployed via CLI.)
-
-Or from the shell, append to root’s crontab (`crontab -e`):
-
-```cron
-0 3 * * * /mnt/tank/apps/dockge/stacks/grove/deploy/deploy.sh >> /mnt/tank/apps/dockge/stacks/grove/deploy.log 2>&1
+/mnt/Maru/Apps/Dockge/stacks/grove/deploy/deploy.sh >> /mnt/Maru/Apps/Dockge/stacks/grove/deploy.log 2>&1
 ```
 
 ### Notes
 
-- **Port 8080** stays on your tailnet for Tailscale; Cloudflare Tunnel does not require forwarding 8080 on your router.
-- **Progress sync**: use Settings → export backup; each browser keeps its own library unless you restore a backup.
-- **Gemini key**: restrict by HTTP referrer in [Google AI Studio](https://aistudio.google.com/) if you want extra safety.
-- **Dockge rebuild**: after `git pull`, you must **rebuild** (Deploy in Dockge or `deploy.sh`) — Dockge does not auto-pull from git on its own.
+- Change the published port in compose if `8080` is taken (e.g. `8081:80`).
+- **Gemini key**: Settings in each browser; restrict by HTTP referrer in [Google AI Studio](https://aistudio.google.com/) for your public URL.
+- Prefer keeping work on **`main`** — pull `main` on TrueNAS after merges.

@@ -13,10 +13,14 @@ export const TOPICS = [
   'Festivals',
   'Adjectives',
   'Grammar',
+  'Measure Words',
   'Introductions',
   'Pets',
   'Other',
 ] as const;
+
+/** Seed/migration list of dedicated measure-word entries. */
+export const MEASURE_WORD_HANZI = ['个', '本', '杯', '口', '只', '两', '块'] as const;
 
 /** Built-in topic labels; custom topics are plain strings. */
 export type BuiltinTopic = (typeof TOPICS)[number];
@@ -104,7 +108,7 @@ export interface ComposeResult {
   notes?: string;
 }
 
-/** AI coaching when Level 3 typed answer ≠ expected sentence. */
+/** AI coaching when a Forms attempt ≠ expected sentence. */
 export interface Level3Feedback {
   /** True if the attempt still conveys the English prompt correctly. */
   meaningOk: boolean;

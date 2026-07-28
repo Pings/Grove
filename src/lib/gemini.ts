@@ -80,8 +80,9 @@ Rules:
 - hsk is 1, 2, 3, or "unknown"
 - If input is a sentence, put full sentence in hanzi/english and split useful new words/short phrases into components (not every particle).
 - If input is already a single word/phrase, components may be empty or include meaningful sub-parts.
+- If the word is a measure word / 量词 (个, 本, 杯, 口, 只, 块, …), include topic "Measure Words".
 - Prefer Simplified Chinese.
-- notes: short learner tip only when useful (measure words, 了, tone nuance). Otherwise empty string.
+- notes: leave empty (grammar tips come from the library, not this step).
 
 Return ONLY JSON:
 {
@@ -420,8 +421,9 @@ Return ONLY JSON: { "note": "..." }  (use "" if nothing useful)`;
   }
 }
 
-/** Coach a Level 3 attempt that didn’t match the expected Chinese string. */
-export async function reviewLevel3Attempt(input: {
+/** Coach when a Forms attempt doesn’t match the expected Chinese. */
+export async function explainFormsMistake(input: {
+  level: 1 | 2 | 3;
   englishPrompt: string;
   expectedHanzi: string;
   userHanzi: string;
@@ -434,11 +436,20 @@ export async function reviewLevel3Attempt(input: {
       .map((v) => `${v.hanzi} = ${v.english}`)
       .join('\n');
 
-    const prompt = `You coach an HSK 1–3 Chinese learner practicing sentence writing.
+    const levelHint =
+      input.level === 1
+        ? 'This is a fill-in-the-blank drill. Focus on why the chosen words don’t fit the blanks / English prompt.'
+        : input.level === 2
+          ? 'This is typing a saved sentence from memory. Explain the mismatch vs the model line.'
+          : 'This is free sentence writing from known vocab. Synonyms / valid alternate word order may still be OK.';
+
+    const prompt = `You coach an HSK 1–3 Chinese learner practicing sentence forms (Level ${input.level}).
+
+${levelHint}
 
 English prompt the learner should express: """${input.englishPrompt}"""
 Expected model sentence: """${input.expectedHanzi}"""
-Learner wrote: """${input.userHanzi}"""
+Learner wrote / filled: """${input.userHanzi}"""
 
 Words already on their Shelf (do NOT list these as newWords):
 ${vocabBlock || '(none)'}
@@ -446,10 +457,10 @@ ${vocabBlock || '(none)'}
 The learner’s Chinese does NOT match the model sentence character-for-character.
 
 Decide:
-1. meaningOk — true if their sentence still correctly and naturally expresses the English prompt (synonyms / different valid word order OK). false if wrong meaning, broken Chinese, or off-topic.
+1. meaningOk — true if their attempt still correctly and naturally expresses the English prompt (synonyms / different valid word order OK). false if wrong meaning, broken Chinese, wrong blank choice, or off-topic. For Level 1 blanks, usually false unless the filled words still make a correct sentence for the English.
 2. note — ONE short coaching note (max ~28 words):
    - If meaningOk: congratulate clearly (e.g. new vocabulary or a valid different structure). Mention the useful difference.
-   - If not: explain the main mistake vs the English prompt / model sentence. Do not belittle.
+   - If not: explain the main mistake vs the English prompt / model sentence. Be specific (particle, word order, wrong measure word, tone of meaning, etc.). Do not belittle.
 3. newStructure — true only when meaningOk AND their pattern/structure differs usefully from the model.
 4. newWords — useful NEW words/phrases they used correctly that are NOT clearly on the Shelf. Prefer content words (not 的/了/吗/是 alone). Empty if none. type is word or phrase (not sentence). Stay ≤ HSK 3. topics from: ${TOPIC_LIST}
 
@@ -508,6 +519,16 @@ Return ONLY JSON:
   } catch (err) {
     throw friendlyError(err);
   }
+}
+
+/** @deprecated Use explainFormsMistake */
+export async function reviewLevel3Attempt(input: {
+  englishPrompt: string;
+  expectedHanzi: string;
+  userHanzi: string;
+  knownVocab: Array<{ hanzi: string; english: string }>;
+}): Promise<Level3Feedback> {
+  return explainFormsMistake({ ...input, level: 3 });
 }
 
 /** @deprecated Use regenerateTeachingNote */

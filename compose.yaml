@@ -9,9 +9,23 @@ services:
     restart: unless-stopped
     ports:
       - "8080:80"
+    depends_on:
+      - sync
+
+  sync:
+    build: ./deploy/sync-server
+    image: grove-sync:latest
+    pull_policy: build
+    container_name: grove-sync
+    restart: unless-stopped
+    ports:
+      - "8090:8090"
+    volumes:
+      - grove-sync-data:/data
 
   # Public HTTPS via Cloudflare Tunnel (optional).
   # Enable with COMPOSE_PROFILES=cloudflare and TUNNEL_TOKEN in .env
+  # Or omit profiles (as on some Dockge setups) so cloudflared always starts.
   cloudflared:
     image: cloudflare/cloudflared:latest
     container_name: grove-cloudflared
@@ -23,3 +37,6 @@ services:
       - grove
     profiles:
       - cloudflare
+
+volumes:
+  grove-sync-data:

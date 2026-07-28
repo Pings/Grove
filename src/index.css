@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;700&family=Noto+Serif+SC:wght@500;600;700&family=Young+Serif&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Noto+Sans:ital,wght@0,400;0,500;0,600;1,400&family=Noto+Sans+SC:wght@400;500;700&family=Noto+Serif+SC:wght@400;500;600&family=Young+Serif&display=swap');
 
 :root {
   --bg-base: #f3efe6;
@@ -22,8 +22,12 @@
   --radius: 12px;
   --font-ui: 'Manrope', system-ui, sans-serif;
   --font-display: 'Young Serif', Georgia, serif;
+  /* Readable Chinese (cards, tips, UI labels). Keep weight ≤500. */
   --font-zh: 'Noto Sans SC', 'PingFang SC', 'Hiragino Sans GB', sans-serif;
+  /* Calligraphic Chinese — large display only (hanzi-xl, Gather input). */
   --font-zh-display: 'Noto Serif SC', 'Songti SC', 'Noto Sans SC', serif;
+  /* Latin font with full pinyin tone-mark coverage (āáǎà…). */
+  --font-pinyin: 'Noto Sans', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
   --nav-h: 76px;
 }
 
@@ -162,7 +166,7 @@ a {
 .nav-links .nav-zh {
   font-family: var(--font-zh);
   font-size: 0.82em;
-  font-weight: 600;
+  font-weight: 500;
   opacity: 0.72;
 }
 
@@ -223,7 +227,7 @@ a {
 
 .page-title-zh {
   font-family: var(--font-zh);
-  font-weight: 550;
+  font-weight: 500;
   font-size: 0.72em;
   color: var(--leaf);
   margin-left: 0.15rem;
@@ -381,6 +385,19 @@ select:focus {
   padding-top: 2.4rem;
 }
 
+.entry-editor {
+  margin-top: 0.35rem;
+}
+
+.entry-editor-meta {
+  align-items: flex-end;
+}
+
+.entry-editor-meta .field {
+  flex: 1;
+  min-width: 7rem;
+}
+
 .entry-modal-speak {
   position: absolute;
   top: 0.85rem;
@@ -418,14 +435,20 @@ select:focus {
   font-size: 1.05rem;
 }
 
-.entry-delete-btn {
+.entry-footer-actions {
   position: absolute;
   right: 0;
   top: 50%;
   transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.entry-text-btn {
   border: none;
   background: transparent;
-  color: var(--danger);
+  color: var(--ink-soft);
   font-size: 0.78rem;
   font-weight: 600;
   padding: 0.35rem 0.45rem;
@@ -433,9 +456,13 @@ select:focus {
   opacity: 0.75;
 }
 
-.entry-delete-btn:hover {
+.entry-text-btn:hover {
   opacity: 1;
   text-decoration: underline;
+}
+
+.entry-delete-btn {
+  color: var(--danger);
 }
 
 .chip {
@@ -584,13 +611,13 @@ select:focus {
   padding-right: 2.6rem;
   font-family: var(--font-zh);
   font-size: 1.55rem;
-  font-weight: 700;
+  font-weight: 400;
   line-height: 1.25;
 }
 
 .entry-card-sentence .hanzi {
   font-size: 1.05rem;
-  font-weight: 600;
+  font-weight: 400;
   line-height: 1.4;
   padding-right: 0;
   word-break: break-word;
@@ -661,10 +688,11 @@ select:focus {
 .growth-shelf-card .hanzi {
   font-family: var(--font-zh);
   font-size: 1.2rem;
-  font-weight: 700;
+  font-weight: 400;
 }
 
 .growth-shelf-card .pinyin {
+  font-family: var(--font-pinyin);
   color: var(--accent);
   font-size: 0.78rem;
 }
@@ -726,6 +754,7 @@ select:focus {
 }
 
 .entry-card .pinyin {
+  font-family: var(--font-pinyin);
   color: var(--accent);
   font-size: 0.92rem;
   margin-top: 0.15rem;
@@ -756,7 +785,7 @@ select:focus {
 .hanzi-xl {
   font-family: var(--font-zh-display);
   font-size: clamp(2.85rem, 7vw, 4.1rem);
-  font-weight: 600;
+  font-weight: 400;
   line-height: 1.15;
   letter-spacing: 0.02em;
 }
@@ -774,7 +803,7 @@ select:focus {
 
 .hanzi-xl-sentence {
   font-size: clamp(1.55rem, 4vw, 2.15rem);
-  font-weight: 600;
+  font-weight: 400;
   line-height: 1.35;
   letter-spacing: 0.01em;
   word-break: break-word;
@@ -863,6 +892,7 @@ select:focus {
 }
 
 .pinyin-lg {
+  font-family: var(--font-pinyin);
   color: var(--accent);
   font-size: clamp(1.25rem, 2.8vw, 1.55rem);
   margin-top: 0.2rem;
@@ -986,11 +1016,12 @@ select:focus {
 
 .mc-primary {
   font-size: 1.05rem;
-  font-weight: 600;
+  font-weight: 400;
   line-height: 1.25;
 }
 
 .mc-secondary {
+  font-family: var(--font-pinyin);
   font-size: 0.88rem;
   color: var(--accent);
 }
@@ -1188,10 +1219,11 @@ select:focus {
 }
 
 .add-hanzi-input {
-  font-family: var(--font-zh);
-  font-size: clamp(2rem, 5vw, 2.75rem);
-  font-weight: 700;
-  line-height: 1.2;
+  font-family: var(--font-zh-display);
+  font-size: clamp(2.85rem, 7vw, 4.1rem);
+  font-weight: 400;
+  line-height: 1.15;
+  letter-spacing: 0.02em;
   border: none !important;
   background: transparent !important;
   padding: 0.15rem 0 !important;
@@ -1204,6 +1236,7 @@ select:focus {
 }
 
 .add-pinyin-display {
+  font-family: var(--font-pinyin);
   color: var(--accent);
   font-size: clamp(1.05rem, 2.5vw, 1.35rem);
   font-weight: 500;
@@ -1294,7 +1327,9 @@ select:focus {
 
 .extra-detail-text {
   margin: 0;
+  font-family: var(--font-zh), var(--font-ui);
   font-size: 0.95rem;
+  font-weight: 400;
   line-height: 1.45;
   color: var(--ink);
 }
@@ -1469,6 +1504,70 @@ select:focus {
   font-weight: 700;
 }
 
+.tone-contour {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+}
+
+.tone-contour-svg {
+  display: block;
+  flex-shrink: 0;
+}
+
+.tone-contour-guide {
+  stroke: var(--border);
+  stroke-width: 1;
+  opacity: 0.55;
+}
+
+.tone-contour-stroke {
+  stroke: var(--accent);
+}
+
+.tone-contour-stroke.tone-5 {
+  stroke: var(--ink-faint);
+  stroke-dasharray: 3 2;
+}
+
+.tone-contour-neutral {
+  fill: var(--ink-faint);
+}
+
+.mc-option .tone-contour {
+  margin-bottom: 0.2rem;
+}
+
+.mc-tone-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.tone-prompt-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.tend-modes {
+  grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+}
+
+.tone-reveal-visual {
+  display: flex;
+  justify-content: center;
+  margin-top: 0.35rem;
+}
+
+.mc-grid-tones .mc-option {
+  min-height: 5.5rem;
+}
+
 .flash-continue-row {
   display: flex;
   align-items: center;
@@ -1476,6 +1575,23 @@ select:focus {
   gap: 0.65rem;
   flex-wrap: wrap;
   margin-top: 0.25rem;
+}
+
+.tone-reveal {
+  margin-top: 0.75rem;
+  text-align: center;
+  font-size: 0.95rem;
+  line-height: 1.45;
+  max-width: 34rem;
+}
+
+.tone-sandhi-note {
+  margin-top: 0.45rem;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--leaf) 12%, transparent);
+  border-radius: 0.55rem;
+  padding: 0.55rem 0.75rem;
+  font-size: 0.9rem;
 }
 
 @media (max-width: 720px) {
@@ -1706,7 +1822,7 @@ select:focus {
 .library-pull-tab-zh {
   font-family: var(--font-zh);
   font-size: 1.15rem;
-  font-weight: 700;
+  font-weight: 500;
   line-height: 1;
 }
 
@@ -1722,7 +1838,7 @@ select:focus {
 .library-pull-tab-zh-label {
   font-family: var(--font-zh);
   font-size: 0.78rem;
-  font-weight: 600;
+  font-weight: 500;
   opacity: 0.85;
 }
 
@@ -1784,10 +1900,11 @@ select:focus {
 .library-drawer-item .hanzi {
   font-family: var(--font-zh);
   font-size: 1.25rem;
-  font-weight: 700;
+  font-weight: 400;
 }
 
 .library-drawer-item .pinyin {
+  font-family: var(--font-pinyin);
   color: var(--accent);
   font-size: 0.85rem;
   margin-top: 0.1rem;
@@ -1858,12 +1975,13 @@ select:focus {
 .count-digit-zh {
   font-family: var(--font-zh);
   font-size: clamp(1.05rem, 2.8vw, 1.45rem);
-  font-weight: 700;
+  font-weight: 400;
   line-height: 1.1;
   color: var(--ink);
 }
 
 .count-digit-py {
+  font-family: var(--font-pinyin);
   font-size: 0.62rem;
   color: var(--accent);
   line-height: 1.1;

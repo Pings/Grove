@@ -223,7 +223,7 @@ export function ComposePage() {
                 <div key={word.hanzi} className="checkbox-row" style={{ alignItems: 'center' }}>
                   <div className="grow">
                     <div
-                      style={{ fontFamily: 'var(--font-zh)', fontSize: '1.3rem', fontWeight: 700 }}
+                      style={{ fontFamily: 'var(--font-zh)', fontSize: '1.3rem', fontWeight: 400 }}
                     >
                       {word.hanzi}
                     </div>
