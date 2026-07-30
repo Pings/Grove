@@ -77,7 +77,7 @@ Rules:
 - Stay at or below HSK 3 vocabulary when possible.
 - topics must be chosen from: ${TOPIC_LIST}
 - type is word, phrase, or sentence
-- hsk is 1, 2, 3, or "unknown"
+- hsk: make an educated guess of the official HSK band for this item — prefer 1, 2, or 3. Use "unknown" only if it is clearly above HSK 3 or not real vocab. When unsure between two bands, pick the lower one.
 - If input is a sentence, put full sentence in hanzi/english and split useful new words/short phrases into components (not every particle).
 - If input is already a single word/phrase, components may be empty or include meaningful sub-parts.
 - If the word is a measure word / 量词 (个, 本, 杯, 口, 只, 块, …), include topic "Measure Words".

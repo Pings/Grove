@@ -1,8 +1,9 @@
 import type { VocabEntry } from '../types';
 
 /**
- * Demo cards covering growth stages 0–5 with varied plants.
- * Re-synced on app load so stages stay visible for design checks.
+ * Legacy growth-stage demo cards (示范…).
+ * No longer seeded — removeGrowthDemos() deletes any leftovers on boot.
+ * Helpers kept so Tend/Forms/sync can still filter old rows.
  */
 export const GROWTH_DEMO_ENTRIES: Array<
   Omit<VocabEntry, 'id' | 'createdAt' | 'updatedAt' | 'nextReviewAt'> & {

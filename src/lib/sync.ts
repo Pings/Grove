@@ -35,16 +35,10 @@ export async function buildLocalSnapshot(): Promise<GroveSnapshot> {
 }
 
 async function applySnapshot(snapshot: GroveSnapshot): Promise<void> {
-  // Replace library + quiz bank; keep growth demos if missing from remote.
   const remoteEntries = snapshot.entries.filter((e) => !isGrowthDemoHanzi(e.hanzi));
   await db.transaction('rw', db.entries, db.quizQuestions, async () => {
-    const existing = await db.entries.toArray();
-    const demoRows = existing.filter((e) => isGrowthDemoHanzi(e.hanzi));
     await db.entries.clear();
-    const toAdd: Omit<VocabEntry, 'id'>[] = [
-      ...remoteEntries.map(({ id: _id, ...rest }) => rest),
-      ...demoRows.map(({ id: _id, ...rest }) => rest),
-    ];
+    const toAdd: Omit<VocabEntry, 'id'>[] = remoteEntries.map(({ id: _id, ...rest }) => rest);
     if (toAdd.length > 0) await db.entries.bulkAdd(toAdd);
 
     await db.quizQuestions.clear();

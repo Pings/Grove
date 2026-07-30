@@ -9,7 +9,7 @@ import { HskBadge } from '../components/Badges';
 import { ToneContour, tonesFromOptionId } from '../components/ToneContour';
 import {
   applyReview,
-  buildMultipleChoice,
+  buildQuestion,
   buildSessionQueue,
   countDueEntries,
   drillModeFor,
@@ -17,10 +17,9 @@ import {
   formatAvgResponse,
   isPerformanceLearned,
   isToneMode,
-  promptFor,
-  promptSubtext,
   sandhiNoteFor,
   type CardMode,
+  type LockedQuestion,
   type McOption,
   type ReviewOutcome,
 } from '../lib/flashcards';
@@ -32,9 +31,9 @@ import { tonesFromPinyin } from '../lib/pinyin';
 const MODES: Array<{ id: CardMode; title: string; hint: string }> = [
   { id: 'hanzi-to-english', title: 'Hanzi → English', hint: 'Meaning from characters' },
   { id: 'english-to-hanzi', title: 'English → Hanzi', hint: 'Recall the characters' },
-  { id: 'pinyin-to-hanzi', title: 'Pinyin → Hanzi', hint: 'Match the reading' },
+  { id: 'pinyin-to-hanzi', title: 'Pinyin → Hanzi', hint: 'Hanzi + meaning from the reading' },
   { id: 'hanzi-to-tone', title: 'Hanzi → Tone', hint: 'Hear it, pick the contour' },
-  { id: 'measure-words', title: 'Measure Words', hint: '量词 · English → word' },
+  { id: 'measure-words', title: 'Measure Words', hint: '量词 · meaning or fill the blank' },
 ];
 
 export function FlashcardsPage() {
@@ -73,15 +72,19 @@ export function FlashcardsPage() {
   );
 
   const [choices, setChoices] = useState<McOption[]>([]);
+  const [locked, setLocked] = useState<LockedQuestion | null>(null);
   const toneMode = isToneMode(mode);
 
-  // Lock option order per card — don't reshuffle when entries refresh after a click
+  // Lock prompt + options per card — don't reshuffle when entries refresh after a click
   useEffect(() => {
     if (!active || !current?.id) {
       setChoices([]);
+      setLocked(null);
       return;
     }
-    setChoices(buildMultipleChoice(current, choicePool, mode));
+    const question = buildQuestion(current, choicePool, mode);
+    setChoices(question.choices);
+    setLocked(question);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only new card / mode, not DB refresh
   }, [current?.id, mode, index, active]);
 
@@ -329,18 +332,28 @@ export function FlashcardsPage() {
 
             <div className="tone-prompt-row">
               <div
-                className={drill !== 'english-to-hanzi' ? 'hanzi-xl' : ''}
+                className={locked?.promptIsZh ? 'hanzi-xl' : ''}
                 style={{
-                  fontFamily: drill !== 'english-to-hanzi' ? 'var(--font-zh-display)' : undefined,
-                  fontSize: drill === 'english-to-hanzi' ? '1.6rem' : undefined,
+                  fontFamily: locked?.promptIsZh
+                    ? 'var(--font-zh-display)'
+                    : drill === 'pinyin-to-hanzi'
+                      ? 'var(--font-pinyin)'
+                      : undefined,
+                  fontSize:
+                    locked?.promptIsZh || drill === 'pinyin-to-hanzi' ? undefined : '1.6rem',
                 }}
               >
-                {promptFor(current, mode)}
+                {locked?.prompt ?? ''}
               </div>
               {toneMode && <SpeakButton hanzi={current.hanzi} compact />}
             </div>
-            {promptSubtext(current, mode) && (
-              <div className="pinyin-lg">{promptSubtext(current, mode)}</div>
+            {locked?.promptSubtext && (
+              <div
+                className={drill === 'hanzi-to-english' ? 'pinyin-lg' : 'muted'}
+                style={drill === 'hanzi-to-english' ? undefined : { fontSize: '0.95rem' }}
+              >
+                {locked.promptSubtext}
+              </div>
             )}
             {toneMode && !revealed && (
               <div className="muted" style={{ fontSize: '0.88rem' }}>
@@ -361,6 +374,10 @@ export function FlashcardsPage() {
                 }
 
                 const optionTones = toneMode ? tonesFromOptionId(option.id) : null;
+                const optionIsZh =
+                  drill === 'english-to-hanzi' ||
+                  drill === 'pinyin-to-hanzi' ||
+                  mode === 'measure-words';
 
                 return (
                   <button
@@ -377,14 +394,8 @@ export function FlashcardsPage() {
                     <span
                       className="mc-primary"
                       style={{
-                        fontFamily:
-                          drill === 'english-to-hanzi' || drill === 'pinyin-to-hanzi'
-                            ? 'var(--font-zh)'
-                            : undefined,
-                        fontWeight:
-                          drill === 'english-to-hanzi' || drill === 'pinyin-to-hanzi'
-                            ? 400
-                            : undefined,
+                        fontFamily: optionIsZh ? 'var(--font-zh)' : undefined,
+                        fontWeight: optionIsZh ? 400 : undefined,
                       }}
                     >
                       {option.primary}

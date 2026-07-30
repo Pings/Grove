@@ -336,7 +336,7 @@ export function AddPage() {
                           hsk: v === 'unknown' ? 'unknown' : (Number(v) as 1 | 2 | 3),
                         });
                       }}
-                      aria-label="HSK"
+                      aria-label="HSK (Gemini educated guess — edit if wrong)"
                     >
                       <option value="1">HSK 1</option>
                       <option value="2">HSK 2</option>

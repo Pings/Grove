@@ -2,7 +2,7 @@ import Dexie, { type EntityTable } from 'dexie';
 import type { QuizQuestion, VocabEntry } from '../types';
 import { MEASURE_WORD_HANZI } from '../types';
 import { SEED_ENTRIES } from '../data/seed';
-import { GROWTH_DEMO_ENTRIES, WILTED_DEMO_HANZI, isGrowthDemoHanzi } from '../data/growthDemos';
+import { isGrowthDemoEntry, isGrowthDemoHanzi } from '../data/growthDemos';
 import { SEED_GRAMMAR_TIPS, SEED_HANZI_TIPS, TIPS_CONTENT_VERSION } from '../data/seedTips';
 import { toPinyin } from '../lib/pinyin';
 
@@ -317,35 +317,17 @@ export async function ensureSeeded(): Promise<void> {
       }
 
       await migrateEntryFields();
-      await ensureGrowthDemos();
+      await removeGrowthDemos();
     })();
   }
   return seedPromise;
 }
 
-/** Upsert growth-demo cards so shelf / stages can be previewed. */
-export async function ensureGrowthDemos(): Promise<void> {
-  const now = Date.now();
-  const wiltedDue = now - 5 * 24 * 60 * 60 * 1000; // 5 days overdue
-  for (const demo of GROWTH_DEMO_ENTRIES) {
-    const { demoStage: _stage, ...fields } = demo;
-    const due = WILTED_DEMO_HANZI.has(fields.hanzi) ? wiltedDue : now;
-    const existing = await findByHanzi(fields.hanzi);
-    if (existing?.id != null) {
-      await db.entries.update(existing.id, {
-        ...fields,
-        nextReviewAt: due,
-        updatedAt: now,
-      });
-    } else {
-      await db.entries.add({
-        ...fields,
-        nextReviewAt: due,
-        createdAt: now,
-        updatedAt: now,
-      });
-    }
-  }
+/** One-shot cleanup: remove old shelf growth-demo cards (示范…). */
+export async function removeGrowthDemos(): Promise<void> {
+  const all = await db.entries.toArray();
+  const ids = all.filter((e) => isGrowthDemoEntry(e) && e.id != null).map((e) => e.id!);
+  if (ids.length > 0) await db.entries.bulkDelete(ids);
 }
 
 export async function findByHanzi(hanzi: string): Promise<VocabEntry | undefined> {
