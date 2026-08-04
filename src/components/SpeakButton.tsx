@@ -5,6 +5,8 @@ type Props = {
   hanzi: string;
   /** Compact icon-style control for tight layouts. */
   compact?: boolean;
+  /** Prefer dictionary citation tones (Tend tone drill). */
+  citationTones?: boolean;
 };
 
 function SpeakerIcon({ busy }: { busy: boolean }) {
@@ -24,7 +26,7 @@ function SpeakerIcon({ busy }: { busy: boolean }) {
   );
 }
 
-export function SpeakButton({ hanzi, compact }: Props) {
+export function SpeakButton({ hanzi, compact, citationTones }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -35,7 +37,7 @@ export function SpeakButton({ hanzi, compact }: Props) {
     setBusy(true);
     try {
       stopPronouncing();
-      await pronounceHanzi(text);
+      await pronounceHanzi(text, { citationTones });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not pronounce.');
     } finally {

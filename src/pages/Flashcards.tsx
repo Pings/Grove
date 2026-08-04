@@ -118,13 +118,13 @@ export function FlashcardsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, current?.id, index, revealed, mode]);
 
-  // Auto-play pronunciation for tone mode.
+  // Auto-play pronunciation for tone mode (citation tones, Gemini TTS).
   useEffect(() => {
     if (!active || !current?.hanzi || !toneMode || revealed) return;
     const text = current.hanzi;
     const timer = window.setTimeout(() => {
-      void pronounceHanzi(text).catch(() => {
-        /* speak is best-effort */
+      void pronounceHanzi(text, { citationTones: true }).catch((err) => {
+        console.warn('Tone speak failed:', err);
       });
     }, 200);
     return () => {
@@ -347,7 +347,7 @@ export function FlashcardsPage() {
               >
                 {locked?.prompt ?? ''}
               </div>
-              {toneMode && <SpeakButton hanzi={current.hanzi} compact />}
+              {toneMode && <SpeakButton hanzi={current.hanzi} compact citationTones />}
             </div>
             {locked?.promptSubtext && (
               <div

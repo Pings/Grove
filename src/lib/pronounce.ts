@@ -1,16 +1,28 @@
 import { getApiKey } from './settings';
 
-const TTS_MODELS = [
-  'gemini-3.1-flash-tts-preview',
-  'gemini-2.5-flash-preview-tts',
-] as const;
+/** Prefer a single modern TTS model so tone drills sound consistent. */
+const TTS_MODEL = 'gemini-3.1-flash-tts-preview';
+/** Only if 3.1 is unavailable (quota / not enabled on the key). */
+const TTS_FALLBACK_MODEL = 'gemini-2.5-flash-preview-tts';
 
-/** Natural Mandarin voice from Gemini’s prebuilt set. */
+/** Stable Mandarin-friendly prebuilt voice (Gemini TTS). */
 const TTS_VOICE = 'Kore';
+/** Mandarin Chinese — keeps pronunciation from drifting to other languages. */
+const TTS_LANGUAGE = 'cmn-CN';
 const SAMPLE_RATE = 24000;
+
+export type PronounceOptions = {
+  /**
+   * Tend tone drills: ask for clear citation (dictionary) tones so the
+   * spoken contour matches the answer key (incl. full 3rd tones).
+   */
+  citationTones?: boolean;
+};
 
 const audioCache = new Map<string, string>();
 let currentAudio: HTMLAudioElement | null = null;
+/** Remember which Gemini model succeeded this session — stick to it. */
+let preferredModel: string | null = null;
 
 export function stopPronouncing() {
   if (currentAudio) {
@@ -21,6 +33,10 @@ export function stopPronouncing() {
   if (typeof window !== 'undefined' && window.speechSynthesis) {
     window.speechSynthesis.cancel();
   }
+}
+
+function cacheKey(hanzi: string, options: PronounceOptions): string {
+  return `${TTS_VOICE}|${options.citationTones ? 'cite' : 'nat'}|${hanzi}`;
 }
 
 function base64ToBytes(base64: string): Uint8Array {
@@ -53,7 +69,27 @@ function pcmToWavBlob(pcm: Uint8Array, sampleRate = SAMPLE_RATE): Blob {
   return new Blob([header, new Uint8Array(pcm)], { type: 'audio/wav' });
 }
 
-async function fetchGeminiTts(hanzi: string, apiKey: string, model: string): Promise<string> {
+function ttsPrompt(hanzi: string, citationTones: boolean): string {
+  if (citationTones) {
+    return (
+      `Read this Mandarin Chinese clearly and slowly for a tone-training drill. ` +
+      `Use standard Putonghua (cmn-CN). Pronounce each character with its full ` +
+      `dictionary citation tone (complete dipping third tone; do not apply tone sandhi). ` +
+      `No English. Text only: ${hanzi}`
+    );
+  }
+  return (
+    `Read this Mandarin Chinese clearly in natural standard Putonghua (cmn-CN). ` +
+    `No English. Text only: ${hanzi}`
+  );
+}
+
+async function fetchGeminiTts(
+  hanzi: string,
+  apiKey: string,
+  model: string,
+  options: PronounceOptions,
+): Promise<string> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
   const res = await fetch(url, {
     method: 'POST',
@@ -64,17 +100,13 @@ async function fetchGeminiTts(hanzi: string, apiKey: string, model: string): Pro
     body: JSON.stringify({
       contents: [
         {
-          parts: [
-            {
-              // Exact-text TTS — better for vocab drill than conversational Live API.
-              text: `用标准普通话、清楚自然地朗读：${hanzi}`,
-            },
-          ],
+          parts: [{ text: ttsPrompt(hanzi, Boolean(options.citationTones)) }],
         },
       ],
       generationConfig: {
         responseModalities: ['AUDIO'],
         speechConfig: {
+          languageCode: TTS_LANGUAGE,
           voiceConfig: {
             prebuiltVoiceConfig: {
               voiceName: TTS_VOICE,
@@ -129,12 +161,20 @@ async function playUrl(url: string): Promise<void> {
 
 function pickZhVoice(): SpeechSynthesisVoice | null {
   const voices = window.speechSynthesis?.getVoices() ?? [];
-  return (
-    voices.find((v) => /^zh(-|$)/i.test(v.lang) && /CN|Hans|China|Chinese/i.test(v.lang + v.name)) ||
-    voices.find((v) => /^zh/i.test(v.lang)) ||
-    voices.find((v) => /Chinese|Mandarin|Putonghua|中文|普通话/i.test(v.name)) ||
-    null
-  );
+  // Prefer Google / enhanced Mainland voices when the OS exposes them.
+  const scored = voices
+    .filter((v) => /^zh/i.test(v.lang) || /Chinese|Mandarin|Putonghua|中文|普通话/i.test(v.name))
+    .map((v) => {
+      let score = 0;
+      const blob = `${v.lang} ${v.name}`;
+      if (/zh-CN|cmn-CN|Hans/i.test(blob)) score += 40;
+      if (/Google|Enhanced|Neural|Premium|Tingting|Xiaoxiao|Yaoyao/i.test(blob)) score += 30;
+      if (/CN|China/i.test(blob)) score += 10;
+      if (/TW|HK|yue|Cantonese/i.test(blob)) score -= 20;
+      return { v, score };
+    })
+    .sort((a, b) => b.score - a.score);
+  return scored[0]?.v ?? null;
 }
 
 function speakWithBrowser(hanzi: string): Promise<void> {
@@ -151,7 +191,7 @@ function speakWithBrowser(hanzi: string): Promise<void> {
       started = true;
       const utter = new SpeechSynthesisUtterance(hanzi);
       utter.lang = 'zh-CN';
-      utter.rate = 0.9;
+      utter.rate = 0.85;
       const voice = pickZhVoice();
       if (voice) utter.voice = voice;
       utter.onend = () => resolve();
@@ -169,34 +209,49 @@ function speakWithBrowser(hanzi: string): Promise<void> {
 }
 
 /**
- * Pronounce Chinese with Gemini TTS when an API key is set;
- * otherwise fall back to the browser’s zh-CN voice.
+ * Pronounce Chinese with Gemini 3.1 Flash TTS when an API key is set.
+ * Sticks to one model/voice per session so tone drills stay consistent.
+ * Browser speech is only used when there is no API key (or Gemini TTS fails hard).
  */
-export async function pronounceHanzi(hanzi: string): Promise<void> {
+export async function pronounceHanzi(
+  hanzi: string,
+  options: PronounceOptions = {},
+): Promise<void> {
   const text = hanzi.replace(/\s+/g, '').trim();
   if (!text) return;
 
   const apiKey = getApiKey();
   if (apiKey) {
-    const cached = audioCache.get(text);
+    const key = cacheKey(text, options);
+    const cached = audioCache.get(key);
     if (cached) {
       await playUrl(cached);
       return;
     }
 
+    const models = preferredModel
+      ? [preferredModel, ...[TTS_MODEL, TTS_FALLBACK_MODEL].filter((m) => m !== preferredModel)]
+      : [TTS_MODEL, TTS_FALLBACK_MODEL];
+
     let lastErr: unknown;
-    for (const model of TTS_MODELS) {
+    for (const model of models) {
       try {
-        const url = await fetchGeminiTts(text, apiKey, model);
-        audioCache.set(text, url);
+        const url = await fetchGeminiTts(text, apiKey, model, options);
+        preferredModel = model;
+        audioCache.set(key, url);
         await playUrl(url);
         return;
       } catch (err) {
         lastErr = err;
       }
     }
-    // Fall through to browser voice if Gemini TTS is unavailable.
-    console.warn('Gemini TTS unavailable, using browser voice.', lastErr);
+
+    // Avoid silently switching to a robotic browser voice mid-session —
+    // that is what made tone drills feel like “two different models”.
+    const detail = lastErr instanceof Error ? lastErr.message : String(lastErr ?? '');
+    throw new Error(
+      `Gemini TTS unavailable (${detail || 'unknown error'}). Check your API key / quota, then try again.`,
+    );
   }
 
   await speakWithBrowser(text);
