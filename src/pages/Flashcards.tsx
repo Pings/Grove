@@ -29,12 +29,12 @@ import { getLearnedAvgMs } from '../lib/settings';
 import { pronounceHanzi, stopPronouncing } from '../lib/pronounce';
 import { tonesFromPinyin } from '../lib/pinyin';
 
-const MODES: Array<{ id: CardMode; title: string; hint: string }> = [
-  { id: 'hanzi-to-english', title: 'Hanzi → English', hint: 'Meaning from characters' },
-  { id: 'english-to-hanzi', title: 'English → Hanzi', hint: 'Recall the characters' },
-  { id: 'pinyin-to-hanzi', title: 'Pinyin → Hanzi', hint: 'Hanzi + meaning from the reading' },
-  { id: 'hanzi-to-tone', title: 'Hanzi → Tone', hint: 'Hear it, pick the contour' },
-  { id: 'measure-words', title: 'Measure Words', hint: '量词 · fill the blank in a sentence' },
+const MODES: Array<{ id: CardMode; title: string }> = [
+  { id: 'hanzi-to-english', title: 'Hanzi → English' },
+  { id: 'english-to-hanzi', title: 'English → Hanzi' },
+  { id: 'pinyin-to-hanzi', title: 'Pinyin → Hanzi' },
+  { id: 'hanzi-to-tone', title: 'Hanzi → Tone' },
+  { id: 'measure-words', title: 'Measure Words' },
 ];
 
 export function FlashcardsPage() {
@@ -251,7 +251,6 @@ export function FlashcardsPage() {
         <h1>
           Tend <span className="page-title-zh">培</span>
         </h1>
-        <p>Daily care for what you’ve planted — timed drills, tips when you miss.</p>
       </header>
 
       <section className="panel stack">
@@ -265,7 +264,6 @@ export function FlashcardsPage() {
               onClick={() => setMode(item.id)}
             >
               <span className="maker-level-title">{item.title}</span>
-              <span className="maker-level-hint">{item.hint}</span>
             </button>
           ))}
         </div>
@@ -338,11 +336,16 @@ export function FlashcardsPage() {
                 style={{
                   fontFamily: locked?.promptIsZh
                     ? 'var(--font-zh-display)'
-                    : drill === 'pinyin-to-hanzi'
+                    : drill === 'pinyin-to-hanzi' ||
+                        (mode === 'measure-words' && !locked?.promptIsZh)
                       ? 'var(--font-pinyin)'
                       : undefined,
                   fontSize:
-                    locked?.promptIsZh || drill === 'pinyin-to-hanzi' ? undefined : '1.6rem',
+                    locked?.promptIsZh ||
+                    drill === 'pinyin-to-hanzi' ||
+                    (mode === 'measure-words' && !locked?.promptIsZh)
+                      ? undefined
+                      : '1.6rem',
                 }}
               >
                 {locked?.prompt ?? ''}
@@ -355,11 +358,6 @@ export function FlashcardsPage() {
                 style={drill === 'hanzi-to-english' ? undefined : { fontSize: '0.95rem' }}
               >
                 {locked.promptSubtext}
-              </div>
-            )}
-            {toneMode && !revealed && (
-              <div className="muted" style={{ fontSize: '0.88rem' }}>
-                Listen, then pick the tone contour
               </div>
             )}
 

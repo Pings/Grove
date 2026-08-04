@@ -144,7 +144,7 @@ export function ExtraDetailPanel({ entry, onUpdated }: Props) {
               type="button"
               className={`rate-btn ${rating === 1 ? 'active-up' : ''}`}
               onClick={() => void rate(kind, 1)}
-              title="Keep this tip (locks it from regenerate)"
+              title="Keep"
               aria-label="Keep this tip"
             >
               ▲
@@ -153,7 +153,7 @@ export function ExtraDetailPanel({ entry, onUpdated }: Props) {
               type="button"
               className={`rate-btn ${rating === -1 ? 'active-down' : ''}`}
               onClick={() => void rate(kind, -1)}
-              title="Not helpful — marks it bad and fetches a new tip"
+              title="Not helpful"
               aria-label="Not helpful, get a new tip"
             >
               ▼
@@ -164,18 +164,11 @@ export function ExtraDetailPanel({ entry, onUpdated }: Props) {
             className="tip-regen"
             disabled={busyKind != null || rating === 1}
             onClick={() => void getNewNote(kind, rating === -1 ? -1 : 0)}
-            title={
-              rating === 1
-                ? 'Unvote ▲ first — kept tips stay locked'
-                : 'Another tip — replace without voting (▼ also does this after marking bad)'
-            }
+            title={rating === 1 ? 'Unvote ▲ first' : 'Another tip'}
           >
             {busyKind === kind ? '…' : 'Another tip'}
           </button>
         </div>
-        <p className="muted tip-actions-hint">
-          ▼ = not helpful (auto-gets a new tip). Another tip = just replace. ▲ locks the tip.
-        </p>
       </div>
     );
   }

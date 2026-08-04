@@ -220,7 +220,7 @@ export function promptSubtext(entry: VocabEntry, mode: CardMode): string | undef
   const drill = drillModeFor(mode);
   if (drill === 'hanzi-to-english') return entry.pinyin;
   if (drill === 'hanzi-to-tone') return undefined;
-  if (mode === 'measure-words') return 'Pick the measure word';
+  if (mode === 'measure-words') return undefined;
   return undefined;
 }
 
@@ -416,7 +416,7 @@ function entryToOption(entry: VocabEntry, mode: CardMode, isCorrect: boolean): M
     return {
       id: String(entry.id ?? entry.hanzi),
       primary: entry.hanzi,
-      secondary: entry.english,
+      secondary: entry.pinyin,
       isCorrect,
     };
   }
@@ -494,15 +494,13 @@ export function buildQuestion(
       return {
         choices,
         prompt: cloze.prompt,
-        promptSubtext: `${cloze.english} · fill in the measure word`,
         promptIsZh: true,
         measureKind: 'cloze',
       };
     }
     return {
       choices,
-      prompt: current.english,
-      promptSubtext: 'Which measure word is this?',
+      prompt: current.pinyin,
       promptIsZh: false,
       measureKind: 'meaning',
     };

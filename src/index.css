@@ -1347,13 +1347,6 @@ select:focus {
   gap: 0.45rem;
 }
 
-.tip-actions-hint {
-  margin: 0.15rem 0 0;
-  font-size: 0.72rem;
-  text-align: right;
-  line-height: 1.35;
-}
-
 .tip-votes {
   display: flex;
   flex-direction: row;
