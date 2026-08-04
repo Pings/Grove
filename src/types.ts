@@ -96,6 +96,8 @@ export interface EnrichResult {
 
 export interface ComposeResult {
   translation: string;
+  /** Plain English meaning of the Chinese sentence (input or result). */
+  meaning: string;
   usedOnlyLearned: boolean;
   unknownWords: Array<{
     hanzi: string;

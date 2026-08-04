@@ -10,28 +10,35 @@ import {
 import {
   clearApiKey,
   DEFAULT_LEARNED_AVG_SECONDS,
+  ensureSyncProfiles,
   GEMINI_MODELS,
+  getActiveProfile,
+  getActiveProfileId,
   getApiKey,
   getGeminiModel,
   getLastSyncAt,
   getLearnedAvgSeconds,
   getQuizRefreshMeta,
   getStorageMode,
-  getSyncKey,
+  getSyncProfiles,
   getSyncUrl,
+  makeProfileSyncKey,
   MAX_LEARNED_AVG_SECONDS,
   MIN_LEARNED_AVG_SECONDS,
+  removeSyncProfile,
   setApiKey,
   setGeminiModel,
   setLearnedAvgSeconds,
   setStorageMode,
   setSyncKey,
   setSyncUrl,
+  upsertSyncProfile,
   type GeminiModelId,
   type StorageMode,
+  type SyncProfile,
 } from '../lib/settings';
 import { countAddedSinceLastRefresh, refreshQuizContent } from '../lib/quizRefresh';
-import { pushLocalSnapshot, syncOnBoot, testSyncConnection } from '../lib/sync';
+import { pushLocalSnapshot, switchSyncProfile, syncOnBoot, testSyncConnection } from '../lib/sync';
 
 export function SettingsPage() {
   const [apiKey, setApiKeyState] = useState(getApiKey());
@@ -39,7 +46,13 @@ export function SettingsPage() {
   const [learnedAvgSec, setLearnedAvgSecState] = useState(getLearnedAvgSeconds);
   const [storageMode, setStorageModeState] = useState<StorageMode>(getStorageMode);
   const [syncUrl, setSyncUrlState] = useState(getSyncUrl);
-  const [syncKey, setSyncKeyState] = useState(getSyncKey);
+  const [profiles, setProfilesState] = useState<SyncProfile[]>(() =>
+    getStorageMode() === 'sync' ? ensureSyncProfiles() : getSyncProfiles(),
+  );
+  const [activeProfileId, setActiveProfileIdState] = useState(
+    () => getActiveProfileId() ?? getActiveProfile()?.id ?? '',
+  );
+  const [newProfileName, setNewProfileName] = useState('');
   const [lastSyncAt, setLastSyncAtState] = useState(getLastSyncAt);
   const [syncBusy, setSyncBusy] = useState(false);
   const [message, setMessage] = useState('');
@@ -77,12 +90,18 @@ export function SettingsPage() {
   function saveStorage() {
     setStorageMode(storageMode);
     setSyncUrl(syncUrl);
-    setSyncKey(syncKey);
-    setMessage(
-      storageMode === 'sync'
-        ? 'Sync settings saved. Use Test / Sync now to connect.'
-        : 'Using this browser only.',
-    );
+    if (storageMode === 'sync') {
+      const list = ensureSyncProfiles();
+      setProfilesState(list);
+      const active = list.find((p) => p.id === activeProfileId) ?? list[0]!;
+      setActiveProfileIdState(active.id);
+      setSyncKey(active.syncKey);
+      setMessage(
+        `Sync on — profile “${active.name}”. Same URL on every device; each profile has its own word list & questions.`,
+      );
+    } else {
+      setMessage('Using this browser only.');
+    }
     setError('');
   }
 
@@ -93,7 +112,9 @@ export function SettingsPage() {
     try {
       setStorageMode(storageMode);
       setSyncUrl(syncUrl);
-      setSyncKey(syncKey);
+      const list = ensureSyncProfiles();
+      const active = list.find((p) => p.id === activeProfileId) ?? list[0]!;
+      setSyncKey(active.syncKey);
       const note = await testSyncConnection();
       setMessage(note);
     } catch (err) {
@@ -111,10 +132,12 @@ export function SettingsPage() {
       setStorageMode('sync');
       setStorageModeState('sync');
       setSyncUrl(syncUrl);
-      setSyncKey(syncKey);
+      const list = ensureSyncProfiles();
+      const active = list.find((p) => p.id === activeProfileId) ?? list[0]!;
+      setSyncKey(active.syncKey);
       const result = await syncOnBoot();
-      if (result === 'pulled') setMessage('Pulled latest library from the server.');
-      else if (result === 'pushed') setMessage('Uploaded this browser’s library to the server.');
+      if (result === 'pulled') setMessage(`Pulled “${active.name}” from the server.`);
+      else if (result === 'pushed') setMessage(`Uploaded “${active.name}” to the server.`);
       else setMessage('Sync skipped.');
       setLastSyncAtState(getLastSyncAt());
     } catch (err) {
@@ -132,14 +155,98 @@ export function SettingsPage() {
       setStorageMode('sync');
       setStorageModeState('sync');
       setSyncUrl(syncUrl);
-      setSyncKey(syncKey);
+      const list = ensureSyncProfiles();
+      const active = list.find((p) => p.id === activeProfileId) ?? list[0]!;
+      setSyncKey(active.syncKey);
       await pushLocalSnapshot();
+      setMessage(`Uploaded this device’s “${active.name}” library.`);
       setLastSyncAtState(getLastSyncAt());
-      setMessage('Forced upload of this browser’s library.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed.');
     } finally {
       setSyncBusy(false);
+    }
+  }
+
+  async function handleSwitchProfile(profile: SyncProfile) {
+    if (profile.id === activeProfileId) return;
+    setSyncBusy(true);
+    setError('');
+    setMessage('');
+    try {
+      setStorageMode('sync');
+      setStorageModeState('sync');
+      setSyncUrl(syncUrl);
+      const result = await switchSyncProfile(profile);
+      setActiveProfileIdState(profile.id);
+      setProfilesState(getSyncProfiles());
+      setQuizMeta(getQuizRefreshMeta());
+      setLastSyncAtState(getLastSyncAt());
+      setMessage(
+        result === 'pulled'
+          ? `Switched to “${profile.name}” — loaded from server.`
+          : `Switched to “${profile.name}” — empty library (fresh profile).`,
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not switch profile.');
+    } finally {
+      setSyncBusy(false);
+    }
+  }
+
+  async function handleCreateProfile() {
+    const name = newProfileName.trim();
+    if (!name) {
+      setError('Enter a profile name.');
+      return;
+    }
+    if (profiles.some((p) => p.name.toLowerCase() === name.toLowerCase())) {
+      setError('That profile name already exists.');
+      return;
+    }
+    setSyncBusy(true);
+    setError('');
+    setMessage('');
+    try {
+      setStorageMode('sync');
+      setStorageModeState('sync');
+      setSyncUrl(syncUrl);
+      const profile: SyncProfile = {
+        id: crypto.randomUUID(),
+        name,
+        syncKey: makeProfileSyncKey(name),
+      };
+      upsertSyncProfile(profile);
+      setProfilesState(getSyncProfiles());
+      setNewProfileName('');
+      const result = await switchSyncProfile(profile);
+      setActiveProfileIdState(profile.id);
+      setQuizMeta(getQuizRefreshMeta());
+      setLastSyncAtState(getLastSyncAt());
+      setMessage(
+        result === 'empty'
+          ? `Created “${name}” — starting with no words. Add cards, then Sync.`
+          : `Created “${name}” and loaded remote data.`,
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not create profile.');
+    } finally {
+      setSyncBusy(false);
+    }
+  }
+
+  async function handleDeleteProfile(profile: SyncProfile) {
+    if (profiles.length <= 1) {
+      setError('Keep at least one profile.');
+      return;
+    }
+    if (!window.confirm(`Remove profile “${profile.name}” from this device? Server data is kept.`)) {
+      return;
+    }
+    const remaining = removeSyncProfile(profile.id);
+    setProfilesState(remaining);
+    if (profile.id === activeProfileId && remaining[0]) {
+      await handleSwitchProfile(remaining[0]);
     }
   }
 
@@ -285,9 +392,9 @@ export function SettingsPage() {
           Library storage
         </h2>
         <p className="muted" style={{ margin: 0 }}>
-          By default the word list and quiz questions live in <strong>this browser only</strong>{' '}
-          (IndexedDB). Enable sync to keep a shared copy on your TrueNAS sync server so phone and
-          work stay aligned over Tailscale.
+          Word list and quiz questions can live in this browser only, or on your sync server under a{' '}
+          <strong>profile</strong> (e.g. Nikko). Switching profile loads that profile’s data — a new
+          profile starts empty.
         </p>
         <div className="row">
           <button
@@ -300,7 +407,12 @@ export function SettingsPage() {
           <button
             type="button"
             className={`chip ${storageMode === 'sync' ? 'active' : ''}`}
-            onClick={() => setStorageModeState('sync')}
+            onClick={() => {
+              setStorageModeState('sync');
+              const list = ensureSyncProfiles();
+              setProfilesState(list);
+              setActiveProfileIdState(getActiveProfileId() ?? list[0]!.id);
+            }}
           >
             Sync to server
           </button>
@@ -313,23 +425,67 @@ export function SettingsPage() {
                 type="url"
                 value={syncUrl}
                 onChange={(e) => setSyncUrlState(e.target.value)}
-                placeholder="http://100.x.x.x:8090"
+                placeholder="http://your-nas:8090"
                 autoComplete="off"
               />
             </label>
-            <label className="field">
-              Sync key (shared secret, 8+ chars)
-              <input
-                type="password"
-                value={syncKey}
-                onChange={(e) => setSyncKeyState(e.target.value)}
-                placeholder="your-private-key"
-                autoComplete="off"
-              />
-            </label>
+
+            <div className="stack" style={{ gap: '0.45rem' }}>
+              <div className="muted" style={{ fontWeight: 600 }}>
+                Profiles
+              </div>
+              <div className="row" style={{ flexWrap: 'wrap', gap: '0.4rem' }}>
+                {profiles.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    className={`chip ${p.id === activeProfileId ? 'active' : ''}`}
+                    disabled={syncBusy}
+                    onClick={() => void handleSwitchProfile(p)}
+                    title={`Key: ${p.syncKey.slice(0, 12)}…`}
+                  >
+                    {p.name}
+                  </button>
+                ))}
+              </div>
+              <div className="row" style={{ alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                <label className="field grow" style={{ margin: 0 }}>
+                  New profile
+                  <input
+                    value={newProfileName}
+                    onChange={(e) => setNewProfileName(e.target.value)}
+                    placeholder="e.g. Practice"
+                    autoComplete="off"
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={syncBusy}
+                  onClick={() => void handleCreateProfile()}
+                >
+                  Create
+                </button>
+              </div>
+              {profiles.length > 1 && (
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  disabled={syncBusy}
+                  onClick={() => {
+                    const active = profiles.find((p) => p.id === activeProfileId);
+                    if (active) void handleDeleteProfile(active);
+                  }}
+                >
+                  Remove active profile from this device
+                </button>
+              )}
+            </div>
+
             <p className="muted" style={{ margin: 0, fontSize: '0.88rem' }}>
-              Same URL + key on every device. Last sync: {lastSyncLabel}. Edits upload
-              automatically after a short pause.
+              Active: <strong>{profiles.find((p) => p.id === activeProfileId)?.name ?? '—'}</strong>
+              . Last sync: {lastSyncLabel}. Same server URL on every device; pick the same profile
+              name after creating it once (or share the profile key).
             </p>
           </>
         )}

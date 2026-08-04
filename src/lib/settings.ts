@@ -147,7 +147,111 @@ export function setLastSyncAt(ts: number): void {
   localStorage.setItem(LAST_SYNC_AT_KEY, String(ts));
 }
 
+export function clearLastSyncAt(): void {
+  localStorage.removeItem(LAST_SYNC_AT_KEY);
+}
+
 export function isSyncConfigured(): boolean {
   const key = getSyncKey();
   return getStorageMode() === 'sync' && Boolean(getSyncUrl()) && key.length >= 8;
+}
+
+export type SyncProfile = {
+  id: string;
+  name: string;
+  syncKey: string;
+};
+
+const PROFILES_KEY = 'chineseLearning.syncProfiles';
+const ACTIVE_PROFILE_ID_KEY = 'chineseLearning.activeProfileId';
+
+function slugifyProfile(name: string): string {
+  const slug = name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 24);
+  return slug || 'profile';
+}
+
+/** Server keys must be 8–64 chars: letters, numbers, _ - */
+export function makeProfileSyncKey(name: string): string {
+  const slug = slugifyProfile(name);
+  const rand = Math.random().toString(36).slice(2, 10);
+  return `grove-${slug}-${rand}`.slice(0, 64);
+}
+
+export function getSyncProfiles(): SyncProfile[] {
+  const raw = localStorage.getItem(PROFILES_KEY);
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as SyncProfile[];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (p) => p && typeof p.id === 'string' && typeof p.name === 'string' && typeof p.syncKey === 'string',
+    );
+  } catch {
+    return [];
+  }
+}
+
+export function setSyncProfiles(profiles: SyncProfile[]): void {
+  localStorage.setItem(PROFILES_KEY, JSON.stringify(profiles));
+}
+
+export function getActiveProfileId(): string | null {
+  return localStorage.getItem(ACTIVE_PROFILE_ID_KEY);
+}
+
+export function setActiveProfileId(id: string): void {
+  localStorage.setItem(ACTIVE_PROFILE_ID_KEY, id);
+}
+
+/**
+ * Ensure at least one profile exists. Migrates the current sync key into "Nikko"
+ * when enabling profiles for the first time.
+ */
+export function ensureSyncProfiles(): SyncProfile[] {
+  let profiles = getSyncProfiles();
+  if (profiles.length > 0) {
+    const activeId = getActiveProfileId();
+    const active = profiles.find((p) => p.id === activeId) ?? profiles[0]!;
+    if (getActiveProfileId() !== active.id) setActiveProfileId(active.id);
+    if (getSyncKey() !== active.syncKey) setSyncKey(active.syncKey);
+    return profiles;
+  }
+
+  const existingKey = getSyncKey();
+  const nikko: SyncProfile = {
+    id: crypto.randomUUID(),
+    name: 'Nikko',
+    syncKey: existingKey.length >= 8 ? existingKey : makeProfileSyncKey('Nikko'),
+  };
+  profiles = [nikko];
+  setSyncProfiles(profiles);
+  setActiveProfileId(nikko.id);
+  setSyncKey(nikko.syncKey);
+  return profiles;
+}
+
+export function getActiveProfile(): SyncProfile | null {
+  const profiles = ensureSyncProfiles();
+  const id = getActiveProfileId();
+  return profiles.find((p) => p.id === id) ?? profiles[0] ?? null;
+}
+
+export function upsertSyncProfile(profile: SyncProfile): SyncProfile[] {
+  const profiles = getSyncProfiles();
+  const idx = profiles.findIndex((p) => p.id === profile.id);
+  if (idx >= 0) profiles[idx] = profile;
+  else profiles.push(profile);
+  setSyncProfiles(profiles);
+  return profiles;
+}
+
+export function removeSyncProfile(id: string): SyncProfile[] {
+  const next = getSyncProfiles().filter((p) => p.id !== id);
+  setSyncProfiles(next);
+  return next;
 }

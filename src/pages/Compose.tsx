@@ -206,6 +206,15 @@ export function ComposePage() {
             )}
           </div>
 
+          {result.meaning && (
+            <div>
+              <div className="muted" style={{ fontWeight: 600, marginBottom: '0.35rem' }}>
+                Meaning
+              </div>
+              <div style={{ fontSize: '1.15rem', lineHeight: 1.45 }}>{result.meaning}</div>
+            </div>
+          )}
+
           <div className={`alert ${result.usedOnlyLearned ? 'alert-info' : 'alert-warn'}`}>
             {result.usedOnlyLearned
               ? 'Stayed within your learned / library vocabulary.'

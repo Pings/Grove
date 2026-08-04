@@ -400,15 +400,24 @@ function entryToOption(entry: VocabEntry, mode: CardMode, isCorrect: boolean): M
     return {
       id: String(entry.id ?? entry.hanzi),
       primary: entry.hanzi,
+      // English only — never re-show pinyin on the options
       secondary: entry.english,
       isCorrect,
     };
   }
   // english-to-hanzi + measure-words options
+  if (mode === 'measure-words') {
+    return {
+      id: String(entry.id ?? entry.hanzi),
+      primary: entry.hanzi,
+      secondary: entry.english,
+      isCorrect,
+    };
+  }
   return {
     id: String(entry.id ?? entry.hanzi),
     primary: entry.hanzi,
-    secondary: mode === 'measure-words' ? entry.english : entry.pinyin,
+    secondary: entry.pinyin,
     isCorrect,
   };
 }
@@ -466,8 +475,8 @@ export function buildQuestion(
   if (mode === 'measure-words') {
     const mwPool = filterEntriesForMode(pool, 'measure-words');
     const cloze = clozeForMeasureWord(current.hanzi);
-    // Prefer cloze when we have a template; otherwise fall back to meaning.
-    const useCloze = Boolean(cloze) && Math.random() < 0.7;
+    // Prefer full-sentence fill-the-blank whenever we have a template.
+    const useCloze = Boolean(cloze);
 
     const distractors = pickDistractors(current, mwPool, mode, Math.max(0, count - 1));
     const choices = shuffle([
@@ -479,7 +488,7 @@ export function buildQuestion(
       return {
         choices,
         prompt: cloze.prompt,
-        promptSubtext: `${cloze.english} · pick the measure word`,
+        promptSubtext: `${cloze.english} · fill in the measure word`,
         promptIsZh: true,
         measureKind: 'cloze',
       };

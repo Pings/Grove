@@ -1,13 +1,17 @@
-import { db } from '../db/schema';
+import { clearLibraryData, db } from '../db/schema';
 import {
+  clearLastSyncAt,
   getLastSyncAt,
   getQuizRefreshMeta,
   getSyncKey,
   getSyncUrl,
   isSyncConfigured,
+  setActiveProfileId,
   setLastSyncAt,
   setQuizRefreshMeta,
+  setSyncKey,
   type GroveSnapshot,
+  type SyncProfile,
 } from './settings';
 import { isGrowthDemoHanzi } from '../data/growthDemos';
 import type { QuizQuestion, VocabEntry } from '../types';
@@ -136,4 +140,46 @@ export async function testSyncConnection(): Promise<string> {
   const remote = await pullRemoteSnapshot();
   if (!remote) return 'Connected — no remote snapshot yet (will upload on save).';
   return `Connected — remote has ${remote.entries?.length ?? 0} entries, updated ${new Date(remote.updatedAt).toLocaleString()}.`;
+}
+
+/**
+ * Switch to another sync profile: optionally push current, clear local library,
+ * load that profile’s server snapshot (or leave empty if none).
+ */
+export async function switchSyncProfile(
+  profile: SyncProfile,
+  options: { pushCurrent?: boolean } = {},
+): Promise<'pulled' | 'empty'> {
+  if (!getSyncUrl()) throw new Error('Enter a sync server URL first.');
+  if (profile.syncKey.length < 8) throw new Error('Profile sync key is invalid.');
+
+  if (options.pushCurrent !== false && isSyncConfigured()) {
+    try {
+      await pushLocalSnapshot();
+    } catch (err) {
+      console.warn('Could not push before profile switch:', err);
+    }
+  }
+
+  setActiveProfileId(profile.id);
+  setSyncKey(profile.syncKey);
+  clearLastSyncAt();
+  localStorage.removeItem('chineseLearning.quizRefreshMeta');
+
+  await clearLibraryData();
+
+  const remote = await pullRemoteSnapshot();
+  if (remote) {
+    await applySnapshot(remote);
+    return 'pulled';
+  }
+
+  // Fresh profile — empty library + empty remote placeholder
+  await pushLocalSnapshot({
+    updatedAt: Date.now(),
+    entries: [],
+    quizQuestions: [],
+    quizRefreshMeta: null,
+  });
+  return 'empty';
 }

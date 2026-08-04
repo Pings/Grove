@@ -1,46 +1,45 @@
 /**
- * Cloze drills for measure words — blank is where the 量词 goes.
- * English line is shown as a hint under the sentence.
+ * Cloze drills for measure words — full sentences with a blank for the 量词.
  */
 export type MeasureWordCloze = {
-  /** e.g. 一___书 — learner picks 本 */
+  /** e.g. 我想看一___书 — learner picks 本 */
   prompt: string;
   english: string;
 };
 
 export const MEASURE_WORD_CLOZES: Record<string, MeasureWordCloze[]> = {
   个: [
-    { prompt: '一___人', english: 'one person' },
-    { prompt: '这___学期', english: 'this semester' },
-    { prompt: '两___朋友', english: 'two friends' },
-    { prompt: '哪___？', english: 'which one?' },
+    { prompt: '学校有一___新老师。', english: 'The school has a new teacher.' },
+    { prompt: '这___学期很长。', english: 'This semester is long.' },
+    { prompt: '我有两___好朋友。', english: 'I have two good friends.' },
+    { prompt: '你要哪___？', english: 'Which one do you want?' },
   ],
   本: [
-    { prompt: '一___书', english: 'one book' },
-    { prompt: '这___汉语书', english: 'this Chinese book' },
-    { prompt: '那___词典', english: 'that dictionary' },
+    { prompt: '我想买一___汉语书。', english: 'I want to buy a Chinese book.' },
+    { prompt: '这___书很好看。', english: 'This book is interesting.' },
+    { prompt: '桌子上有那___词典。', english: 'That dictionary is on the table.' },
   ],
   杯: [
-    { prompt: '一___茶', english: 'a cup of tea' },
-    { prompt: '两___水', english: 'two glasses of water' },
-    { prompt: '这___咖啡', english: 'this cup of coffee' },
+    { prompt: '请给我一___茶。', english: 'Please give me a cup of tea.' },
+    { prompt: '我想喝两___水。', english: 'I want to drink two glasses of water.' },
+    { prompt: '这___咖啡多少钱？', english: 'How much is this cup of coffee?' },
   ],
   口: [
-    { prompt: '三___人', english: 'a family of three' },
-    { prompt: '家有四___人', english: 'there are four people in the family' },
+    { prompt: '我家有三___人。', english: 'There are three people in my family.' },
+    { prompt: '他们家有四___人。', english: 'Their family has four people.' },
   ],
   只: [
-    { prompt: '一___猫', english: 'one cat' },
-    { prompt: '两___狗', english: 'two dogs' },
-    { prompt: '这___鸟', english: 'this bird' },
+    { prompt: '我养了一___猫。', english: 'I have a cat.' },
+    { prompt: '公园里有两___狗。', english: 'There are two dogs in the park.' },
+    { prompt: '树上有一___鸟。', english: 'There is a bird in the tree.' },
   ],
   两: [
-    { prompt: '___本书', english: 'two books (before a measure word)' },
-    { prompt: '___杯茶', english: 'two cups of tea' },
+    { prompt: '我买了___本书。', english: 'I bought two books.' },
+    { prompt: '请给我___杯茶。', english: 'Please give me two cups of tea.' },
   ],
   块: [
-    { prompt: '十___钱', english: 'ten kuai / yuan' },
-    { prompt: '多少___？', english: 'how much (money)?' },
+    { prompt: '这本书十___钱。', english: 'This book is ten yuan.' },
+    { prompt: '一共多少___？', english: 'How much is it altogether?' },
   ],
 };
 

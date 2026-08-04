@@ -5,6 +5,7 @@ import { SEED_ENTRIES } from '../data/seed';
 import { isGrowthDemoEntry, isGrowthDemoHanzi } from '../data/growthDemos';
 import { SEED_GRAMMAR_TIPS, SEED_HANZI_TIPS, TIPS_CONTENT_VERSION } from '../data/seedTips';
 import { toPinyin } from '../lib/pinyin';
+import { getStorageMode } from '../lib/settings';
 
 const DEFAULT_TIMER_MS = 8000;
 const TIPS_VERSION_KEY = 'chineseLearning.tipsContentVersion';
@@ -301,7 +302,8 @@ export async function ensureSeeded(): Promise<void> {
       await dedupeEntries();
 
       const count = await db.entries.count();
-      if (count === 0) {
+      // Don't auto-seed when sync/profiles are on — empty profile must stay empty.
+      if (count === 0 && getStorageMode() !== 'sync') {
         const now = Date.now();
         const seen = new Set<string>();
         const rows: Omit<VocabEntry, 'id'>[] = [];
@@ -321,6 +323,14 @@ export async function ensureSeeded(): Promise<void> {
     })();
   }
   return seedPromise;
+}
+
+/** Wipe library + quiz bank (used when switching sync profiles). */
+export async function clearLibraryData(): Promise<void> {
+  await db.transaction('rw', db.entries, db.quizQuestions, async () => {
+    await db.entries.clear();
+    await db.quizQuestions.clear();
+  });
 }
 
 /** One-shot cleanup: remove old shelf growth-demo cards (示范…). */

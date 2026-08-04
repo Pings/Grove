@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { ensureSeeded } from './db/schema';
-import { isSyncConfigured } from './lib/settings';
+import { ensureSyncProfiles, isSyncConfigured } from './lib/settings';
 import { syncOnBoot } from './lib/sync';
 
 export default function App() {
@@ -13,6 +13,7 @@ export default function App() {
     ensureSeeded()
       .then(async () => {
         if (isSyncConfigured()) {
+          ensureSyncProfiles();
           try {
             await syncOnBoot();
           } catch (err) {

@@ -33,7 +33,7 @@ const MODES: Array<{ id: CardMode; title: string; hint: string }> = [
   { id: 'english-to-hanzi', title: 'English → Hanzi', hint: 'Recall the characters' },
   { id: 'pinyin-to-hanzi', title: 'Pinyin → Hanzi', hint: 'Hanzi + meaning from the reading' },
   { id: 'hanzi-to-tone', title: 'Hanzi → Tone', hint: 'Hear it, pick the contour' },
-  { id: 'measure-words', title: 'Measure Words', hint: '量词 · meaning or fill the blank' },
+  { id: 'measure-words', title: 'Measure Words', hint: '量词 · fill the blank in a sentence' },
 ];
 
 export function FlashcardsPage() {

@@ -142,15 +142,17 @@ ${vocabBlock || '(empty — learner has no learned words yet)'}
 User input (Chinese or English): """${input}"""
 
 Tasks:
-1. Provide a natural translation / rewrite.
-2. If translating TO Chinese, use learned vocab when possible.
-3. List any words/phrases needed that are NOT clearly covered by the learned list.
-4. topics from: ${TOPIC_LIST}
-5. Keep under HSK 3.
+1. Provide a natural translation / rewrite into the other language (Chinese ↔ English).
+2. Always include "meaning": a plain English gloss of what the Chinese sentence means (the Chinese input if they wrote Chinese, or your Chinese translation if they wrote English). One clear sentence — not a word list.
+3. If translating TO Chinese, use learned vocab when possible.
+4. List any words/phrases needed that are NOT clearly covered by the learned list.
+5. topics from: ${TOPIC_LIST}
+6. Keep under HSK 3.
 
 Return ONLY JSON:
 {
   "translation": "...",
+  "meaning": "English meaning of the Chinese sentence",
   "usedOnlyLearned": true,
   "unknownWords": [
     { "hanzi": "...", "english": "...", "type": "word", "topics": ["Other"], "hsk": 1 }
@@ -163,6 +165,7 @@ Return ONLY JSON:
 
     return {
       translation: String(data.translation ?? '').trim(),
+      meaning: String(data.meaning ?? '').trim(),
       usedOnlyLearned: Boolean(data.usedOnlyLearned),
       notes: String(data.notes ?? '').trim(),
       unknownWords: Array.isArray(data.unknownWords)
