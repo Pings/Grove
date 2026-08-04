@@ -35,7 +35,7 @@ sudo cp docker-compose.yml compose.yaml
 
 **3. Open the app**
 
-- LAN: `http://<truenas-ip>:8080` (or whatever host port you set, e.g. `8081`)
+- LAN: `http://<truenas-ip>:8081` (override with `GROVE_PORT` in `.env`)
 - Public tunnel: your Cloudflare hostname (API is same-origin via `/api`)
 
 **4. Update from git**

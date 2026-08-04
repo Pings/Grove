@@ -64,7 +64,7 @@ else
 fi
 
 PORT="$(grep -E '^GROVE_PORT=' .env 2>/dev/null | cut -d= -f2- || true)"
-PORT="${PORT:-8080}"
+PORT="${PORT:-8081}"
 echo "$LOG_TAG done — now on $(git rev-parse --short HEAD) (host port ${PORT})"
 if [[ -f .env ]] && grep -q '^COMPOSE_PROFILES=.*cloudflare' .env 2>/dev/null; then
   echo "$LOG_TAG cloudflare profile enabled"

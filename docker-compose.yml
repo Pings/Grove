@@ -9,7 +9,7 @@ services:
     restart: unless-stopped
     ports:
       # Host port from .env (GROVE_PORT) so auto-updates don't wipe your custom port
-      - "${GROVE_PORT:-8080}:80"
+      - "${GROVE_PORT:-8081}:80"
     depends_on:
       - sync
 
