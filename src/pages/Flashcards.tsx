@@ -482,7 +482,7 @@ export function FlashcardsPage() {
               <div className="pinyin-lg">{current.pinyin}</div>
               <div className="study-english">{current.english}</div>
             </div>
-            <SpeakButton hanzi={current.hanzi} />
+            <SpeakButton hanzi={current.hanzi} citationTones={toneMode} />
           </div>
 
           {toneMode && (
