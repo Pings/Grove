@@ -5,7 +5,6 @@ import { SEED_ENTRIES } from '../data/seed';
 import { isGrowthDemoEntry, isGrowthDemoHanzi } from '../data/growthDemos';
 import { SEED_GRAMMAR_TIPS, SEED_HANZI_TIPS, TIPS_CONTENT_VERSION } from '../data/seedTips';
 import { toPinyin } from '../lib/pinyin';
-import { getStorageMode } from '../lib/settings';
 
 const DEFAULT_TIMER_MS = 8000;
 const TIPS_VERSION_KEY = 'chineseLearning.tipsContentVersion';
@@ -69,57 +68,6 @@ export function scrubSelfReference(text: string, hanzi: string, english: string)
   out = out.replace(/^is a set phrase meaning\s+[“"'][^”"']+[”"']\s*;?\s*/i, '');
   out = out.replace(/^is a building-block character for\s+[“"'][^”"']+[”"']\s*[—–\\-]?\s*/i, '');
   return out.replace(/\s{2,}/g, ' ').trim();
-}
-
-function tipsFor(hanzi: string, english: string, type: string, topics: string[]) {
-  return {
-    extraDetail: defaultExtraDetail(hanzi, english, type, topics),
-    // Sentences: grammar tip only — character tips don’t apply.
-    hanziDetail: type === 'sentence' ? '' : defaultHanziDetail(hanzi, english),
-  };
-}
-
-function makeEntry(
-  seed: (typeof SEED_ENTRIES)[number],
-  now: number,
-): Omit<VocabEntry, 'id'> {
-  const tips = tipsFor(seed.hanzi, seed.english, seed.type, seed.topics);
-  // Seed author notes → grammar only when they’re usage tips, not radical notes
-  const note = seed.notes?.trim() ?? '';
-  const looksLikeRadicalNote = /radical|component|口|木|女|犭|讠/i.test(note);
-  const grammar =
-    tips.extraDetail ||
-    (!looksLikeRadicalNote && note && note.length < 70 && !/[「]/.test(note)
-      ? note.replace(/\.$/, '') + '.'
-      : '');
-
-  return {
-    hanzi: seed.hanzi,
-    pinyin: seed.pinyin?.trim() || toPinyin(seed.hanzi),
-    english: seed.english,
-    type: seed.type,
-    topics: seed.topics,
-    hsk: seed.hsk,
-    notes: '',
-    extraDetail: grammar,
-    extraDetailRating: 0,
-    rejectedDetails: [],
-    hanziDetail: tips.hanziDetail,
-    hanziDetailRating: 0,
-    rejectedHanziDetails: [],
-    status: seed.status ?? 'learning',
-    ease: 2.5,
-    interval: 0,
-    nextReviewAt: now,
-    lastResult: null,
-    timerMs: DEFAULT_TIMER_MS,
-    correctCount: 0,
-    wrongCount: 0,
-    totalResponseMs: 0,
-    responseCount: 0,
-    createdAt: now,
-    updatedAt: now,
-  };
 }
 
 /** Remove duplicate hanzi rows (keeps lowest id). */
@@ -296,28 +244,14 @@ export async function migrateEntryFields(): Promise<void> {
 
 let seedPromise: Promise<void> | null = null;
 
+/**
+ * Light local DB maintenance. Word data is loaded from the Grove server in App boot —
+ * never auto-seed an empty profile.
+ */
 export async function ensureSeeded(): Promise<void> {
   if (!seedPromise) {
     seedPromise = (async () => {
       await dedupeEntries();
-
-      const count = await db.entries.count();
-      // Don't auto-seed when sync/profiles are on — empty profile must stay empty.
-      if (count === 0 && getStorageMode() !== 'sync') {
-        const now = Date.now();
-        const seen = new Set<string>();
-        const rows: Omit<VocabEntry, 'id'>[] = [];
-
-        for (const seed of SEED_ENTRIES) {
-          const key = normalizeHanzi(seed.hanzi);
-          if (seen.has(key)) continue;
-          seen.add(key);
-          rows.push(makeEntry(seed, now));
-        }
-
-        await db.entries.bulkAdd(rows);
-      }
-
       await migrateEntryFields();
       await removeGrowthDemos();
     })();

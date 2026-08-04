@@ -6,15 +6,13 @@ Local Vite + React learning app (HSK-focused): Shelf, Gather, Tend, Temper, Form
 
 ## Where data lives
 
-| Data | Default | Optional |
-|------|---------|----------|
-| Word list (Shelf / Lines) | Browser IndexedDB | Sync server |
-| Quiz questions (Forms) | Browser IndexedDB | Sync server |
-| Gemini API key & settings | Browser localStorage | Always local |
+| Data | Location |
+|------|----------|
+| Word list & quiz questions | Grove server (`grove-sync`), same host as the site |
+| Profiles (Nikko + extras) | Grove server — each profile is its own database |
+| Gemini API key (and model / learned threshold) | Browser only |
 
-**This browser** — each phone/laptop keeps its own copy (export/import JSON to move).
-
-**Sync to server** — Settings → Library storage → run the sync container, then enter its URL + a shared sync key on every device.
+There is no “this browser only” mode. Opening the site loads the active profile from the server; edits save back automatically. Create a **new profile** only when you want a separate empty word database (Nikko stays as the main library).
 
 ## Deploy on TrueNAS (Dockge)
 
@@ -37,8 +35,8 @@ sudo cp docker-compose.yml compose.yaml
 
 **3. Open the app**
 
-- Tailscale / LAN: `http://<truenas-ip>:8080` (or whatever host port you set, e.g. `8081`)
-- Sync API: `http://<truenas-ip>:8090`
+- LAN: `http://<truenas-ip>:8080` (or whatever host port you set, e.g. `8081`)
+- Public tunnel: your Cloudflare hostname (API is same-origin via `/api`)
 
 **4. Update from git**
 
@@ -116,14 +114,20 @@ Simplest: remove the `profiles: [cloudflare]` block from `cloudflared` in compos
 
 Do **not** put `COMPOSE_PROFILES` or the token on the `grove` service — only on `.env` / `cloudflared`.
 
-### Sync across devices
+### Profiles (word databases)
 
-In Grove → **Settings** → **Library storage** → **Sync to server**:
+In Grove → **Settings** → **Word database**:
 
-- URL: your sync server (e.g. `http://<truenas-ip>:8090`)
-- **Profiles**: first profile is **Nikko** (keeps your existing library/key). Create more for separate empty libraries.
-- Switching profile loads that profile’s words + quiz questions from the server (or starts empty).
-- **Test connection** → **Sync now**
+- **Nikko** is the default library on the server.
+- **Create empty DB** makes a new profile with its own empty word list (does not copy Nikko).
+- Switching profile loads that profile from the server.
+- Edits save automatically; use **Reload from server** if you need a fresh pull.
 
-Edits upload automatically after a short pause.
+Nginx proxies `/api` to `grove-sync`, so Cloudflare (and LAN) use the same site origin — no separate sync URL in the browser.
+
+### Notes
+
+- Put **`GROVE_PORT`** (and tunnel settings) in `.env` — auto-update overwrites `compose.yaml` from git but keeps `.env`.
+- **Gemini key**: Settings in each browser; restrict by HTTP referrer in [Google AI Studio](https://aistudio.google.com/) for your public URL.
+- Auto-update tracks **`main`**.
 

@@ -5,56 +5,50 @@ import {
   importEntries,
   resetTimers,
   db,
-  ensureSeeded,
 } from '../db/schema';
 import {
   clearApiKey,
   DEFAULT_LEARNED_AVG_SECONDS,
-  ensureSyncProfiles,
   GEMINI_MODELS,
-  getActiveProfile,
   getActiveProfileId,
   getApiKey,
   getGeminiModel,
-  getLastSyncAt,
   getLearnedAvgSeconds,
   getQuizRefreshMeta,
-  getStorageMode,
-  getSyncProfiles,
-  getSyncUrl,
-  makeProfileSyncKey,
   MAX_LEARNED_AVG_SECONDS,
   MIN_LEARNED_AVG_SECONDS,
-  removeSyncProfile,
   setApiKey,
   setGeminiModel,
   setLearnedAvgSeconds,
-  setStorageMode,
-  setSyncKey,
-  setSyncUrl,
-  upsertSyncProfile,
+  setQuizRefreshMeta,
   type GeminiModelId,
-  type StorageMode,
   type SyncProfile,
 } from '../lib/settings';
 import { countAddedSinceLastRefresh, refreshQuizContent } from '../lib/quizRefresh';
-import { pushLocalSnapshot, switchSyncProfile, syncOnBoot, testSyncConnection } from '../lib/sync';
+import {
+  createRemoteProfile,
+  deleteRemoteProfile,
+  fetchProfiles,
+  getCachedProfiles,
+  getLastServerAt,
+  pushLocalSnapshot,
+  reloadActiveProfile,
+  scheduleSyncPush,
+  switchSyncProfile,
+  testServerConnection,
+} from '../lib/sync';
 
 export function SettingsPage() {
   const [apiKey, setApiKeyState] = useState(getApiKey());
   const [model, setModelState] = useState<GeminiModelId>(getGeminiModel());
   const [learnedAvgSec, setLearnedAvgSecState] = useState(getLearnedAvgSeconds);
-  const [storageMode, setStorageModeState] = useState<StorageMode>(getStorageMode);
-  const [syncUrl, setSyncUrlState] = useState(getSyncUrl);
-  const [profiles, setProfilesState] = useState<SyncProfile[]>(() =>
-    getStorageMode() === 'sync' ? ensureSyncProfiles() : getSyncProfiles(),
-  );
+  const [profiles, setProfilesState] = useState<SyncProfile[]>(() => getCachedProfiles());
   const [activeProfileId, setActiveProfileIdState] = useState(
-    () => getActiveProfileId() ?? getActiveProfile()?.id ?? '',
+    () => getActiveProfileId() ?? getCachedProfiles()[0]?.id ?? '',
   );
   const [newProfileName, setNewProfileName] = useState('');
-  const [lastSyncAt, setLastSyncAtState] = useState(getLastSyncAt);
-  const [syncBusy, setSyncBusy] = useState(false);
+  const [lastServerAt, setLastServerAtState] = useState(getLastServerAt);
+  const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [addedSinceRefresh, setAddedSinceRefresh] = useState(0);
@@ -73,11 +67,23 @@ export function SettingsPage() {
     return () => sub.unsubscribe();
   }, []);
 
+  useEffect(() => {
+    void fetchProfiles()
+      .then((list) => {
+        setProfilesState(list);
+        const id = getActiveProfileId() ?? list.find((p) => p.id === 'nikko')?.id ?? list[0]?.id ?? '';
+        setActiveProfileIdState(id);
+      })
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : 'Could not load profiles.');
+      });
+  }, []);
+
   function saveKey() {
     setApiKey(apiKey);
     setGeminiModel(model);
     setLearnedAvgSeconds(learnedAvgSec);
-    setMessage('Settings saved locally in this browser.');
+    setMessage('API settings saved in this browser.');
     setError('');
   }
 
@@ -87,110 +93,55 @@ export function SettingsPage() {
     setMessage('API key cleared.');
   }
 
-  function saveStorage() {
-    setStorageMode(storageMode);
-    setSyncUrl(syncUrl);
-    if (storageMode === 'sync') {
-      const list = ensureSyncProfiles();
-      setProfilesState(list);
-      const active = list.find((p) => p.id === activeProfileId) ?? list[0]!;
-      setActiveProfileIdState(active.id);
-      setSyncKey(active.syncKey);
-      setMessage(
-        `Sync on — profile “${active.name}”. Same URL on every device; each profile has its own word list & questions.`,
-      );
-    } else {
-      setMessage('Using this browser only.');
-    }
-    setError('');
-  }
-
-  async function handleTestSync() {
-    setSyncBusy(true);
+  async function handleReload() {
+    setBusy(true);
     setError('');
     setMessage('');
     try {
-      setStorageMode(storageMode);
-      setSyncUrl(syncUrl);
-      const list = ensureSyncProfiles();
-      const active = list.find((p) => p.id === activeProfileId) ?? list[0]!;
-      setSyncKey(active.syncKey);
-      const note = await testSyncConnection();
-      setMessage(note);
+      const result = await reloadActiveProfile();
+      setQuizMeta(getQuizRefreshMeta());
+      setLastServerAtState(getLastServerAt());
+      setMessage(result === 'pulled' ? 'Reloaded library from the server.' : 'Active profile is empty.');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not reach sync server.');
+      setError(err instanceof Error ? err.message : 'Reload failed.');
     } finally {
-      setSyncBusy(false);
+      setBusy(false);
     }
   }
 
-  async function handleSyncNow() {
-    setSyncBusy(true);
+  async function handleTest() {
+    setBusy(true);
     setError('');
     setMessage('');
     try {
-      setStorageMode('sync');
-      setStorageModeState('sync');
-      setSyncUrl(syncUrl);
-      const list = ensureSyncProfiles();
-      const active = list.find((p) => p.id === activeProfileId) ?? list[0]!;
-      setSyncKey(active.syncKey);
-      const result = await syncOnBoot();
-      if (result === 'pulled') setMessage(`Pulled “${active.name}” from the server.`);
-      else if (result === 'pushed') setMessage(`Uploaded “${active.name}” to the server.`);
-      else setMessage('Sync skipped.');
-      setLastSyncAtState(getLastSyncAt());
+      setMessage(await testServerConnection());
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Sync failed.');
+      setError(err instanceof Error ? err.message : 'Could not reach the Grove server.');
     } finally {
-      setSyncBusy(false);
-    }
-  }
-
-  async function handleForcePush() {
-    setSyncBusy(true);
-    setError('');
-    setMessage('');
-    try {
-      setStorageMode('sync');
-      setStorageModeState('sync');
-      setSyncUrl(syncUrl);
-      const list = ensureSyncProfiles();
-      const active = list.find((p) => p.id === activeProfileId) ?? list[0]!;
-      setSyncKey(active.syncKey);
-      await pushLocalSnapshot();
-      setMessage(`Uploaded this device’s “${active.name}” library.`);
-      setLastSyncAtState(getLastSyncAt());
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Upload failed.');
-    } finally {
-      setSyncBusy(false);
+      setBusy(false);
     }
   }
 
   async function handleSwitchProfile(profile: SyncProfile) {
     if (profile.id === activeProfileId) return;
-    setSyncBusy(true);
+    setBusy(true);
     setError('');
     setMessage('');
     try {
-      setStorageMode('sync');
-      setStorageModeState('sync');
-      setSyncUrl(syncUrl);
       const result = await switchSyncProfile(profile);
       setActiveProfileIdState(profile.id);
-      setProfilesState(getSyncProfiles());
+      setProfilesState(getCachedProfiles());
       setQuizMeta(getQuizRefreshMeta());
-      setLastSyncAtState(getLastSyncAt());
+      setLastServerAtState(getLastServerAt());
       setMessage(
         result === 'pulled'
-          ? `Switched to “${profile.name}” — loaded from server.`
-          : `Switched to “${profile.name}” — empty library (fresh profile).`,
+          ? `Switched to “${profile.name}”.`
+          : `Switched to “${profile.name}” — empty library.`,
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not switch profile.');
     } finally {
-      setSyncBusy(false);
+      setBusy(false);
     }
   }
 
@@ -200,53 +151,50 @@ export function SettingsPage() {
       setError('Enter a profile name.');
       return;
     }
-    if (profiles.some((p) => p.name.toLowerCase() === name.toLowerCase())) {
-      setError('That profile name already exists.');
-      return;
-    }
-    setSyncBusy(true);
+    setBusy(true);
     setError('');
     setMessage('');
     try {
-      setStorageMode('sync');
-      setStorageModeState('sync');
-      setSyncUrl(syncUrl);
-      const profile: SyncProfile = {
-        id: crypto.randomUUID(),
-        name,
-        syncKey: makeProfileSyncKey(name),
-      };
-      upsertSyncProfile(profile);
-      setProfilesState(getSyncProfiles());
+      const { profile, profiles: list } = await createRemoteProfile(name);
+      setProfilesState(list);
       setNewProfileName('');
-      const result = await switchSyncProfile(profile);
+      const result = await switchSyncProfile(profile, { pushCurrent: true });
       setActiveProfileIdState(profile.id);
       setQuizMeta(getQuizRefreshMeta());
-      setLastSyncAtState(getLastSyncAt());
+      setLastServerAtState(getLastServerAt());
       setMessage(
         result === 'empty'
-          ? `Created “${name}” — starting with no words. Add cards, then Sync.`
-          : `Created “${name}” and loaded remote data.`,
+          ? `Created “${name}” with a new empty word database.`
+          : `Created “${name}”.`,
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not create profile.');
     } finally {
-      setSyncBusy(false);
+      setBusy(false);
     }
   }
 
   async function handleDeleteProfile(profile: SyncProfile) {
-    if (profiles.length <= 1) {
-      setError('Keep at least one profile.');
+    if (profile.id === 'nikko' || profile.name === 'Nikko') {
+      setError('Cannot delete Nikko.');
       return;
     }
-    if (!window.confirm(`Remove profile “${profile.name}” from this device? Server data is kept.`)) {
+    if (!window.confirm(`Delete profile “${profile.name}” from the server list? (Word data files are kept.)`)) {
       return;
     }
-    const remaining = removeSyncProfile(profile.id);
-    setProfilesState(remaining);
-    if (profile.id === activeProfileId && remaining[0]) {
-      await handleSwitchProfile(remaining[0]);
+    setBusy(true);
+    setError('');
+    try {
+      const remaining = await deleteRemoteProfile(profile.id);
+      setProfilesState(remaining);
+      if (profile.id === activeProfileId && remaining[0]) {
+        await handleSwitchProfile(remaining[0]);
+      }
+      setMessage(`Removed “${profile.name}” from the profile list.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not delete profile.');
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -268,7 +216,8 @@ export function SettingsPage() {
       const data = JSON.parse(text) as import('../types').VocabEntry[];
       if (!Array.isArray(data)) throw new Error('Backup must be a JSON array.');
       const count = await importEntries(data);
-      setMessage(`Imported ${count} entries (merged by hanzi).`);
+      scheduleSyncPush(400);
+      setMessage(`Imported ${count} entries (merged by hanzi) — saving to server.`);
       setError('');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Import failed.');
@@ -278,20 +227,37 @@ export function SettingsPage() {
   async function handleResetTimers() {
     if (!confirm('Reset all flashcard timers and review schedules?')) return;
     await resetTimers();
-    setMessage('Flashcard timers reset.');
+    scheduleSyncPush(400);
+    setMessage('Flashcard timers reset — saving to server.');
   }
 
-  async function handleReseed() {
+  async function handleClearLibrary() {
     if (
       !confirm(
-        'This deletes your library and reloads the starter Chinese Board seed. Continue?',
+        'Delete all words and quiz questions in the active profile on the server? This cannot be undone.',
       )
     ) {
       return;
     }
-    await db.entries.clear();
-    await ensureSeeded();
-    setMessage('Library reseeded from Chinese Board content.');
+    setBusy(true);
+    try {
+      await db.entries.clear();
+      await db.quizQuestions.clear();
+      setQuizRefreshMeta(null);
+      await pushLocalSnapshot({
+        updatedAt: Date.now(),
+        entries: [],
+        quizQuestions: [],
+        quizRefreshMeta: null,
+      });
+      setQuizMeta(null);
+      setLastServerAtState(getLastServerAt());
+      setMessage('Active profile cleared on the server.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not clear library.');
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function handleRefreshQuiz() {
@@ -316,6 +282,7 @@ export function SettingsPage() {
       );
       setAddedSinceRefresh(0);
       setQuizMeta(getQuizRefreshMeta());
+      scheduleSyncPush(400);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Refresh failed.');
     } finally {
@@ -326,13 +293,14 @@ export function SettingsPage() {
   const lastRefreshLabel = quizMeta
     ? new Date(quizMeta.lastQuizRefreshAt).toLocaleString()
     : 'Never';
-  const lastSyncLabel = lastSyncAt ? new Date(lastSyncAt).toLocaleString() : 'Never';
+  const lastSaveLabel = lastServerAt ? new Date(lastServerAt).toLocaleString() : '—';
+  const activeName = profiles.find((p) => p.id === activeProfileId)?.name ?? '—';
 
   return (
     <div className="stack">
       <header className="page-header">
         <h1>Settings</h1>
-        <p>Water the roots — API key, backups, and how green “learned” cards grow.</p>
+        <p>API key stays in this browser. Word lists live on the Grove server.</p>
       </header>
 
       <section className="panel stack">
@@ -344,7 +312,7 @@ export function SettingsPage() {
           <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer">
             Google AI Studio
           </a>
-          . Stored only in localStorage on this device.
+          . This is the only library-related secret stored in the browser.
         </p>
         <label className="field">
           API key
@@ -389,138 +357,88 @@ export function SettingsPage() {
 
       <section className="panel stack">
         <h2 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: '1.25rem' }}>
-          Library storage
+          Word database
         </h2>
         <p className="muted" style={{ margin: 0 }}>
-          Word list and quiz questions can live in this browser only, or on your sync server under a{' '}
-          <strong>profile</strong> (e.g. Nikko). Switching profile loads that profile’s data — a new
-          profile starts empty.
+          Words and quiz questions are saved on the machine running Grove (not in this browser).
+          Edits upload automatically. <strong>Nikko</strong> is the main library. Create a new
+          profile only when you want a separate empty database.
+        </p>
+
+        <div className="stack" style={{ gap: '0.45rem' }}>
+          <div className="muted" style={{ fontWeight: 600 }}>
+            Profiles
+          </div>
+          <div className="row" style={{ flexWrap: 'wrap', gap: '0.4rem' }}>
+            {profiles.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                className={`chip ${p.id === activeProfileId ? 'active' : ''}`}
+                disabled={busy}
+                onClick={() => void handleSwitchProfile(p)}
+              >
+                {p.name}
+              </button>
+            ))}
+          </div>
+          <div className="row" style={{ alignItems: 'flex-end', flexWrap: 'wrap' }}>
+            <label className="field grow" style={{ margin: 0 }}>
+              New profile
+              <input
+                value={newProfileName}
+                onChange={(e) => setNewProfileName(e.target.value)}
+                placeholder="e.g. Practice"
+                autoComplete="off"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') void handleCreateProfile();
+                }}
+              />
+            </label>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={busy}
+              onClick={() => void handleCreateProfile()}
+            >
+              Create empty DB
+            </button>
+          </div>
+          {profiles.some((p) => p.id === activeProfileId && p.name !== 'Nikko' && p.id !== 'nikko') && (
+            <button
+              type="button"
+              className="btn btn-ghost"
+              disabled={busy}
+              onClick={() => {
+                const active = profiles.find((p) => p.id === activeProfileId);
+                if (active) void handleDeleteProfile(active);
+              }}
+            >
+              Remove active profile from list
+            </button>
+          )}
+        </div>
+
+        <p className="muted" style={{ margin: 0, fontSize: '0.88rem' }}>
+          Active: <strong>{activeName}</strong>. Last server save: {lastSaveLabel}.
         </p>
         <div className="row">
           <button
             type="button"
-            className={`chip ${storageMode === 'local' ? 'active' : ''}`}
-            onClick={() => setStorageModeState('local')}
+            className="btn btn-ghost"
+            disabled={busy}
+            onClick={() => void handleTest()}
           >
-            This browser
+            Test server
           </button>
           <button
             type="button"
-            className={`chip ${storageMode === 'sync' ? 'active' : ''}`}
-            onClick={() => {
-              setStorageModeState('sync');
-              const list = ensureSyncProfiles();
-              setProfilesState(list);
-              setActiveProfileIdState(getActiveProfileId() ?? list[0]!.id);
-            }}
+            className="btn btn-secondary"
+            disabled={busy}
+            onClick={() => void handleReload()}
           >
-            Sync to server
+            {busy ? 'Working…' : 'Reload from server'}
           </button>
-        </div>
-        {storageMode === 'sync' && (
-          <>
-            <label className="field">
-              Sync server URL
-              <input
-                type="url"
-                value={syncUrl}
-                onChange={(e) => setSyncUrlState(e.target.value)}
-                placeholder="http://your-nas:8090"
-                autoComplete="off"
-              />
-            </label>
-
-            <div className="stack" style={{ gap: '0.45rem' }}>
-              <div className="muted" style={{ fontWeight: 600 }}>
-                Profiles
-              </div>
-              <div className="row" style={{ flexWrap: 'wrap', gap: '0.4rem' }}>
-                {profiles.map((p) => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    className={`chip ${p.id === activeProfileId ? 'active' : ''}`}
-                    disabled={syncBusy}
-                    onClick={() => void handleSwitchProfile(p)}
-                    title={`Key: ${p.syncKey.slice(0, 12)}…`}
-                  >
-                    {p.name}
-                  </button>
-                ))}
-              </div>
-              <div className="row" style={{ alignItems: 'flex-end', flexWrap: 'wrap' }}>
-                <label className="field grow" style={{ margin: 0 }}>
-                  New profile
-                  <input
-                    value={newProfileName}
-                    onChange={(e) => setNewProfileName(e.target.value)}
-                    placeholder="e.g. Practice"
-                    autoComplete="off"
-                  />
-                </label>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  disabled={syncBusy}
-                  onClick={() => void handleCreateProfile()}
-                >
-                  Create
-                </button>
-              </div>
-              {profiles.length > 1 && (
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  disabled={syncBusy}
-                  onClick={() => {
-                    const active = profiles.find((p) => p.id === activeProfileId);
-                    if (active) void handleDeleteProfile(active);
-                  }}
-                >
-                  Remove active profile from this device
-                </button>
-              )}
-            </div>
-
-            <p className="muted" style={{ margin: 0, fontSize: '0.88rem' }}>
-              Active: <strong>{profiles.find((p) => p.id === activeProfileId)?.name ?? '—'}</strong>
-              . Last sync: {lastSyncLabel}. Same server URL on every device; pick the same profile
-              name after creating it once (or share the profile key).
-            </p>
-          </>
-        )}
-        <div className="row">
-          <button type="button" className="btn btn-secondary" onClick={saveStorage}>
-            Save storage
-          </button>
-          {storageMode === 'sync' && (
-            <>
-              <button
-                type="button"
-                className="btn btn-ghost"
-                disabled={syncBusy}
-                onClick={() => void handleTestSync()}
-              >
-                Test connection
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary"
-                disabled={syncBusy}
-                onClick={() => void handleSyncNow()}
-              >
-                {syncBusy ? 'Syncing…' : 'Sync now'}
-              </button>
-              <button
-                type="button"
-                className="btn btn-ghost"
-                disabled={syncBusy}
-                onClick={() => void handleForcePush()}
-              >
-                Upload this device
-              </button>
-            </>
-          )}
         </div>
       </section>
 
@@ -627,8 +545,13 @@ export function SettingsPage() {
           <button type="button" className="btn btn-secondary" onClick={() => void handleResetTimers()}>
             Reset flashcard timers
           </button>
-          <button type="button" className="btn btn-danger" onClick={() => void handleReseed()}>
-            Reseed library
+          <button
+            type="button"
+            className="btn btn-danger"
+            disabled={busy}
+            onClick={() => void handleClearLibrary()}
+          >
+            Clear active profile
           </button>
         </div>
       </section>

@@ -3,11 +3,23 @@ import type { QuizQuestion, QuizRefreshMeta, VocabEntry } from '../types';
 const API_KEY = 'chineseLearning.geminiApiKey';
 const MODEL_KEY = 'chineseLearning.geminiModel';
 const LEARNED_AVG_SEC_KEY = 'chineseLearning.learnedAvgSeconds';
-const QUIZ_REFRESH_KEY = 'chineseLearning.quizRefreshMeta';
-const STORAGE_MODE_KEY = 'chineseLearning.storageMode';
-const SYNC_URL_KEY = 'chineseLearning.syncUrl';
-const SYNC_KEY_KEY = 'chineseLearning.syncKey';
-const LAST_SYNC_AT_KEY = 'chineseLearning.lastSyncAt';
+
+/** Session-only: which profile is open (not word data). */
+const ACTIVE_PROFILE_ID_SESSION = 'chineseLearning.activeProfileId';
+
+/** Legacy keys to scrub — word DB must not live in the browser. */
+const LEGACY_BROWSER_KEYS = [
+  'chineseLearning.quizRefreshMeta',
+  'chineseLearning.storageMode',
+  'chineseLearning.syncUrl',
+  'chineseLearning.syncKey',
+  'chineseLearning.lastSyncAt',
+  'chineseLearning.syncProfiles',
+  'chineseLearning.activeProfileId',
+  'chineseLearning.library',
+  'chineseLearning.entries',
+  'chineseLearning.quizQuestions',
+];
 
 /** Default: card counts as learned when avg response ≤ this many seconds. */
 export const DEFAULT_LEARNED_AVG_SECONDS = 4;
@@ -37,14 +49,24 @@ export type GeminiModelId = (typeof GEMINI_MODELS)[number]['id'];
 
 export const DEFAULT_GEMINI_MODEL: GeminiModelId = 'gemini-3.1-flash-lite';
 
-export type StorageMode = 'local' | 'sync';
-
 export type GroveSnapshot = {
   updatedAt: number;
   entries: VocabEntry[];
   quizQuestions: QuizQuestion[];
   quizRefreshMeta: QuizRefreshMeta | null;
 };
+
+export type SyncProfile = {
+  id: string;
+  name: string;
+  syncKey: string;
+  createdAt?: number;
+};
+
+/** Same-origin by default (nginx proxies /api → grove-sync). */
+export function getApiBase(): string {
+  return '';
+}
 
 export function getApiKey(): string {
   return localStorage.getItem(API_KEY) ?? '';
@@ -63,11 +85,7 @@ export function getGeminiModel(): GeminiModelId {
   if (GEMINI_MODELS.some((m) => m.id === stored)) {
     return stored as GeminiModelId;
   }
-  // Migrate away from shut-down 2.0 models
-  if (
-    stored === 'gemini-2.0-flash' ||
-    stored === 'gemini-2.0-flash-lite'
-  ) {
+  if (stored === 'gemini-2.0-flash' || stored === 'gemini-2.0-flash-lite') {
     return DEFAULT_GEMINI_MODEL;
   }
   return DEFAULT_GEMINI_MODEL;
@@ -97,161 +115,53 @@ export function getLearnedAvgMs(): number {
   return getLearnedAvgSeconds() * 1000;
 }
 
+/** In-memory quiz meta for the active profile (also stored on the server snapshot). */
+let quizRefreshMetaMemory: QuizRefreshMeta | null = null;
+
 export function getQuizRefreshMeta(): QuizRefreshMeta | null {
-  const raw = localStorage.getItem(QUIZ_REFRESH_KEY);
-  if (!raw) return null;
+  return quizRefreshMetaMemory;
+}
+
+export function setQuizRefreshMeta(meta: QuizRefreshMeta | null): void {
+  quizRefreshMetaMemory = meta;
+}
+
+export function getActiveProfileId(): string | null {
   try {
-    return JSON.parse(raw) as QuizRefreshMeta;
+    return sessionStorage.getItem(ACTIVE_PROFILE_ID_SESSION);
   } catch {
     return null;
   }
 }
 
-export function setQuizRefreshMeta(meta: QuizRefreshMeta): void {
-  localStorage.setItem(QUIZ_REFRESH_KEY, JSON.stringify(meta));
-}
-
-export function getStorageMode(): StorageMode {
-  return localStorage.getItem(STORAGE_MODE_KEY) === 'sync' ? 'sync' : 'local';
-}
-
-export function setStorageMode(mode: StorageMode): void {
-  localStorage.setItem(STORAGE_MODE_KEY, mode);
-}
-
-/** Base URL of the sync server, e.g. http://100.x.x.x:8090 (no trailing slash). */
-export function getSyncUrl(): string {
-  return (localStorage.getItem(SYNC_URL_KEY) ?? '').trim().replace(/\/$/, '');
-}
-
-export function setSyncUrl(url: string): void {
-  localStorage.setItem(SYNC_URL_KEY, url.trim().replace(/\/$/, ''));
-}
-
-export function getSyncKey(): string {
-  return (localStorage.getItem(SYNC_KEY_KEY) ?? '').trim();
-}
-
-export function setSyncKey(key: string): void {
-  localStorage.setItem(SYNC_KEY_KEY, key.trim());
-}
-
-export function getLastSyncAt(): number | null {
-  const raw = localStorage.getItem(LAST_SYNC_AT_KEY);
-  if (!raw) return null;
-  const n = Number(raw);
-  return Number.isFinite(n) ? n : null;
-}
-
-export function setLastSyncAt(ts: number): void {
-  localStorage.setItem(LAST_SYNC_AT_KEY, String(ts));
-}
-
-export function clearLastSyncAt(): void {
-  localStorage.removeItem(LAST_SYNC_AT_KEY);
-}
-
-export function isSyncConfigured(): boolean {
-  const key = getSyncKey();
-  return getStorageMode() === 'sync' && Boolean(getSyncUrl()) && key.length >= 8;
-}
-
-export type SyncProfile = {
-  id: string;
-  name: string;
-  syncKey: string;
-};
-
-const PROFILES_KEY = 'chineseLearning.syncProfiles';
-const ACTIVE_PROFILE_ID_KEY = 'chineseLearning.activeProfileId';
-
-function slugifyProfile(name: string): string {
-  const slug = name
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 24);
-  return slug || 'profile';
-}
-
-/** Server keys must be 8–64 chars: letters, numbers, _ - */
-export function makeProfileSyncKey(name: string): string {
-  const slug = slugifyProfile(name);
-  const rand = Math.random().toString(36).slice(2, 10);
-  return `grove-${slug}-${rand}`.slice(0, 64);
-}
-
-export function getSyncProfiles(): SyncProfile[] {
-  const raw = localStorage.getItem(PROFILES_KEY);
-  if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw) as SyncProfile[];
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
-      (p) => p && typeof p.id === 'string' && typeof p.name === 'string' && typeof p.syncKey === 'string',
-    );
-  } catch {
-    return [];
-  }
-}
-
-export function setSyncProfiles(profiles: SyncProfile[]): void {
-  localStorage.setItem(PROFILES_KEY, JSON.stringify(profiles));
-}
-
-export function getActiveProfileId(): string | null {
-  return localStorage.getItem(ACTIVE_PROFILE_ID_KEY);
-}
-
 export function setActiveProfileId(id: string): void {
-  localStorage.setItem(ACTIVE_PROFILE_ID_KEY, id);
+  try {
+    sessionStorage.setItem(ACTIVE_PROFILE_ID_SESSION, id);
+  } catch {
+    /* ignore */
+  }
 }
 
 /**
- * Ensure at least one profile exists. Migrates the current sync key into "Nikko"
- * when enabling profiles for the first time.
+ * Drop legacy browser copies of the word DB / sync config.
+ * Keeps Gemini API key (and model / learned-threshold prefs).
  */
-export function ensureSyncProfiles(): SyncProfile[] {
-  let profiles = getSyncProfiles();
-  if (profiles.length > 0) {
-    const activeId = getActiveProfileId();
-    const active = profiles.find((p) => p.id === activeId) ?? profiles[0]!;
-    if (getActiveProfileId() !== active.id) setActiveProfileId(active.id);
-    if (getSyncKey() !== active.syncKey) setSyncKey(active.syncKey);
-    return profiles;
+export function scrubLegacyBrowserStorage(): { legacySyncKey: string | null } {
+  let legacySyncKey: string | null = null;
+  try {
+    const rawKey = localStorage.getItem('chineseLearning.syncKey');
+    if (rawKey && rawKey.trim().length >= 8) legacySyncKey = rawKey.trim();
+  } catch {
+    /* ignore */
   }
 
-  const existingKey = getSyncKey();
-  const nikko: SyncProfile = {
-    id: crypto.randomUUID(),
-    name: 'Nikko',
-    syncKey: existingKey.length >= 8 ? existingKey : makeProfileSyncKey('Nikko'),
-  };
-  profiles = [nikko];
-  setSyncProfiles(profiles);
-  setActiveProfileId(nikko.id);
-  setSyncKey(nikko.syncKey);
-  return profiles;
-}
+  for (const key of LEGACY_BROWSER_KEYS) {
+    try {
+      localStorage.removeItem(key);
+    } catch {
+      /* ignore */
+    }
+  }
 
-export function getActiveProfile(): SyncProfile | null {
-  const profiles = ensureSyncProfiles();
-  const id = getActiveProfileId();
-  return profiles.find((p) => p.id === id) ?? profiles[0] ?? null;
-}
-
-export function upsertSyncProfile(profile: SyncProfile): SyncProfile[] {
-  const profiles = getSyncProfiles();
-  const idx = profiles.findIndex((p) => p.id === profile.id);
-  if (idx >= 0) profiles[idx] = profile;
-  else profiles.push(profile);
-  setSyncProfiles(profiles);
-  return profiles;
-}
-
-export function removeSyncProfile(id: string): SyncProfile[] {
-  const next = getSyncProfiles().filter((p) => p.id !== id);
-  setSyncProfiles(next);
-  return next;
+  return { legacySyncKey };
 }
