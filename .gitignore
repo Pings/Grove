@@ -12,6 +12,13 @@ dist
 dist-ssr
 *.local
 
+# Dockge rewrites this in the stack folder; docker-compose.yml is the source of truth.
+# deploy/deploy.sh copies docker-compose.yml → compose.yaml after each update.
+compose.yaml
+.env
+deploy/.update.lock
+deploy/update.log
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

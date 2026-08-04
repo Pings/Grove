@@ -54,6 +54,17 @@ cd /mnt/Maru/Apps/Dockge/stacks/grove
 sudo FORCE_REBUILD=1 ./deploy/deploy.sh
 ```
 
+If update fails with *local changes to compose.yaml would be overwritten*, Dockge edited the compose file. Fix once with a hard reset (keeps `.env`):
+
+```bash
+cd /mnt/Maru/Apps/Dockge/stacks/grove
+sudo git fetch origin main
+sudo git reset --hard origin/main
+sudo cp docker-compose.yml compose.yaml
+sudo ./deploy/deploy.sh
+```
+
+`compose.yaml` is local-only (gitignored). Git tracks `docker-compose.yml`; deploy copies it to `compose.yaml` after each update. Put ports and the tunnel token in `.env`, not in the compose file.
 ### Auto-update from git (recommended)
 
 Keeps TrueNAS on latest `main` without typing commands. Ports and tunnel token stay in `.env` (`GROVE_PORT`, `TUNNEL_TOKEN`) so updates don’t wipe them.
@@ -127,7 +138,7 @@ Nginx proxies `/api` to `grove-sync`, so Cloudflare (and LAN) use the same site 
 
 ### Notes
 
-- Put **`GROVE_PORT`** (and tunnel settings) in `.env` — auto-update overwrites `compose.yaml` from git but keeps `.env`.
+- Put **`GROVE_PORT`** (and tunnel settings) in `.env` — auto-update regenerates `compose.yaml` from `docker-compose.yml` but keeps `.env`.
 - **Gemini key**: Settings in each browser; restrict by HTTP referrer in [Google AI Studio](https://aistudio.google.com/) for your public URL.
 - Auto-update tracks **`main`**.
 
