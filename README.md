@@ -42,18 +42,61 @@ sudo cp docker-compose.yml compose.yaml
 
 **4. Update from git**
 
+Manual:
+
 ```bash
 cd /mnt/Maru/Apps/Dockge/stacks/grove
-sudo git fetch origin
-sudo git checkout main
-sudo git reset --hard origin/main
-sudo cp docker-compose.yml compose.yaml
 sudo ./deploy/deploy.sh
 ```
 
-Then Dockge → **Deploy** if needed. Dockge does **not** `git pull` for you.
+Or force a rebuild even when already current:
 
-**Important:** the stack folder must be the **full git repo**. If Dockge only has `compose.yaml`, re-clone into that folder.
+```bash
+cd /mnt/Maru/Apps/Dockge/stacks/grove
+sudo FORCE_REBUILD=1 ./deploy/deploy.sh
+```
+
+### Auto-update from git (recommended)
+
+Keeps TrueNAS on latest `main` without typing commands. Ports and tunnel token stay in `.env` (`GROVE_PORT`, `TUNNEL_TOKEN`) so updates don’t wipe them.
+
+**1. Put your host port + tunnel in `.env`** (once):
+
+```bash
+cd /mnt/Maru/Apps/Dockge/stacks/grove
+sudo nano .env
+```
+
+Example:
+
+```env
+GROVE_PORT=8081
+SYNC_PORT=8090
+COMPOSE_PROFILES=cloudflare
+TUNNEL_TOKEN=your-token-here
+```
+
+**2. Install the daily cron job** (as root):
+
+```bash
+cd /mnt/Maru/Apps/Dockge/stacks/grove
+sudo chmod +x deploy/deploy.sh deploy/install-cron.sh
+sudo ./deploy/install-cron.sh
+```
+
+Default schedule: **04:15 daily**. Logs: `deploy/update.log`.
+
+**3. Optional — TrueNAS UI cron instead**
+
+System → Advanced → Cron Jobs → add:
+
+| Field | Value |
+|-------|-------|
+| Command | `/mnt/Maru/Apps/Dockge/stacks/grove/deploy/deploy.sh >> /mnt/Maru/Apps/Dockge/stacks/grove/deploy/update.log 2>&1` |
+| Schedule | e.g. daily 4:15 AM |
+| User | `root` |
+
+The script **skips** when there is nothing new on `origin/main`, so it’s safe to run often.
 
 ### Public HTTPS with Cloudflare Tunnel
 
@@ -84,16 +127,3 @@ In Grove → **Settings** → **Library storage** → **Sync to server**:
 
 Edits upload automatically after a short pause.
 
-### Auto-pull (optional)
-
-TrueNAS cron as `root`:
-
-```bash
-/mnt/Maru/Apps/Dockge/stacks/grove/deploy/deploy.sh >> /mnt/Maru/Apps/Dockge/stacks/grove/deploy.log 2>&1
-```
-
-### Notes
-
-- Change the published port in compose if `8080` is taken (e.g. `8081:80`).
-- **Gemini key**: Settings in each browser; restrict by HTTP referrer in [Google AI Studio](https://aistudio.google.com/) for your public URL.
-- Prefer keeping work on **`main`** — pull `main` on TrueNAS after merges.
