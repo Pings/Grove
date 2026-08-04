@@ -9,6 +9,7 @@ import { LinesPage } from '../pages/Lines';
 import { CountPage } from '../pages/Count';
 import { SettingsPage } from '../pages/Settings';
 import { LibraryDrawer, getStoredDrawerOpen } from './LibraryDrawer';
+import { APP_VERSION } from '../version';
 
 const links = [
   { to: '/', label: 'Shelf', zh: '词库', end: true },
@@ -83,6 +84,9 @@ export function Layout() {
   return (
     <div className="app-shell">
       <div className="grove-atmosphere" aria-hidden />
+      <span className="app-version" title={`Grove v${APP_VERSION}`}>
+        v{APP_VERSION}
+      </span>
       <header className="top-nav">
         <BrandMark />
         <nav className="nav-links">

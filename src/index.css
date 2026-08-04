@@ -72,6 +72,22 @@ a {
   isolation: isolate;
 }
 
+.app-version {
+  position: absolute;
+  top: 0.2rem;
+  left: 0.4rem;
+  z-index: 30;
+  font-family: var(--font-ui, ui-sans-serif, system-ui, sans-serif);
+  font-size: 0.62rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  color: var(--muted, #6b5344);
+  opacity: 0.4;
+  pointer-events: none;
+  user-select: none;
+}
+
 .grove-atmosphere {
   pointer-events: none;
   position: fixed;
