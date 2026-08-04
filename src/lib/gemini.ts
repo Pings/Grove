@@ -134,25 +134,45 @@ export async function composeWithLearned(
       .map((v) => `${v.hanzi} (${v.pinyin}) = ${v.english}`)
       .join('\n');
 
-    const prompt = `You help an HSK 1–3 Chinese learner.
+    const hasHanzi = /[\u4e00-\u9fff]/.test(input);
 
-Learned vocabulary (prefer ONLY these when translating):
+    const prompt = `You help a Chinese learner (about HSK 1–3).
+
+Learned vocabulary (prefer ONLY these when writing Chinese):
 ${vocabBlock || '(empty — learner has no learned words yet)'}
 
-User input (Chinese or English): """${input}"""
+User input: """${input}"""
 
-Tasks:
-1. Provide a natural translation / rewrite into the other language (Chinese ↔ English).
-2. Always include "meaning": a plain English gloss of what the Chinese sentence means (the Chinese input if they wrote Chinese, or your Chinese translation if they wrote English). One clear sentence — not a word list.
-3. If translating TO Chinese, use learned vocab when possible.
-4. List any words/phrases needed that are NOT clearly covered by the learned list.
-5. topics from: ${TOPIC_LIST}
-6. Keep under HSK 3.
+Detect whether the input is mainly Chinese or mainly English.
+
+If CHINESE (checking their sentence):
+- mode = "check"
+- ok = true if the sentence is natural and grammatical enough; false if they should fix it
+- meaning = plain English of what THEIR sentence currently means (even if flawed)
+- notes = if ok, a short encouragement or tiny polish tip; if not ok, explain what is wrong and why, and hint how to fix it WITHOUT pasting a full corrected sentence in notes
+- translation = a corrected Chinese version (for optional reveal only — keep it out of notes)
+- Do NOT rewrite their answer into the UI yourself; they will edit and try again
+- usedOnlyLearned / unknownWords as usual
+
+If ENGLISH (they want Chinese):
+- mode = "translate"
+- ok = true
+- translation = natural Chinese using learned vocab when possible
+- meaning = plain English of that Chinese (usually close to their input)
+- notes = brief tips only if useful
+- usedOnlyLearned / unknownWords for words not clearly in the learned list
+
+Notes style:
+- Explain mistakes clearly (word order, particles, wrong word, etc.)
+- Do NOT mention "HSK 1/2/3" or "HSK grammar" unless the issue is that something is ABOVE beginner/HSK-3 level (then say it is more advanced / beyond what you have learned)
+- topics for unknownWords from: ${TOPIC_LIST}
 
 Return ONLY JSON:
 {
+  "mode": "check",
+  "ok": false,
+  "meaning": "...",
   "translation": "...",
-  "meaning": "English meaning of the Chinese sentence",
   "usedOnlyLearned": true,
   "unknownWords": [
     { "hanzi": "...", "english": "...", "type": "word", "topics": ["Other"], "hsk": 1 }
@@ -161,9 +181,20 @@ Return ONLY JSON:
 }`;
 
     const result = await model.generateContent(prompt);
-    const data = parseJson<ComposeResult>(result.response.text());
+    const data = parseJson<ComposeResult & { mode?: string; ok?: boolean }>(
+      result.response.text(),
+    );
+
+    const mode: ComposeResult['mode'] =
+      data.mode === 'translate' || data.mode === 'check'
+        ? data.mode
+        : hasHanzi
+          ? 'check'
+          : 'translate';
 
     return {
+      mode,
+      ok: mode === 'translate' ? true : Boolean(data.ok),
       translation: String(data.translation ?? '').trim(),
       meaning: String(data.meaning ?? '').trim(),
       usedOnlyLearned: Boolean(data.usedOnlyLearned),

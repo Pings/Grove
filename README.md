@@ -77,9 +77,12 @@ Do **not** put `COMPOSE_PROFILES` or the token on the `grove` service — only o
 
 In Grove → **Settings** → **Library storage** → **Sync to server**:
 
-- URL: `http://<truenas-ip>:8090` (or a Tailscale IP; keep sync off the public tunnel unless you add auth)
-- Sync key: any private string (≥ 8 characters), same on all devices
+- URL: your sync server (e.g. `http://<truenas-ip>:8090`)
+- **Profiles**: first profile is **Nikko** (keeps your existing library/key). Create more for separate empty libraries.
+- Switching profile loads that profile’s words + quiz questions from the server (or starts empty).
 - **Test connection** → **Sync now**
+
+Edits upload automatically after a short pause.
 
 ### Auto-pull (optional)
 

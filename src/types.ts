@@ -95,9 +95,17 @@ export interface EnrichResult {
 }
 
 export interface ComposeResult {
-  translation: string;
-  /** Plain English meaning of the Chinese sentence (input or result). */
+  /** What the Chinese means in plain English. */
   meaning: string;
+  /** true when Chinese input is fine (or English→Chinese draft is ready). */
+  ok: boolean;
+  /** 'check' = Chinese input reviewed; 'translate' = English turned into Chinese. */
+  mode: 'check' | 'translate';
+  /**
+   * For translate mode: Chinese draft using learned vocab when possible.
+   * For check mode: optional corrected sentence — UI hides this until the learner asks.
+   */
+  translation: string;
   usedOnlyLearned: boolean;
   unknownWords: Array<{
     hanzi: string;
@@ -107,6 +115,7 @@ export interface ComposeResult {
     topics: Topic[];
     hsk: HskLevel;
   }>;
+  /** What’s wrong / tips — do not label HSK bands unless something is above HSK 3. */
   notes?: string;
 }
 

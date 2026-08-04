@@ -15,6 +15,7 @@ export function ComposePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState<ComposeResult | null>(null);
+  const [showFix, setShowFix] = useState(false);
   const [savedMsg, setSavedMsg] = useState('');
   const deferredInput = useDeferredValue(input);
 
@@ -59,6 +60,7 @@ export function ComposePage() {
     setError('');
     setSavedMsg('');
     setResult(null);
+    setShowFix(false);
     if (!input.trim()) {
       setError('Type English or Chinese to check.');
       return;
@@ -101,12 +103,19 @@ export function ComposePage() {
     setInput((prev) => {
       const trimmed = prev.trimEnd();
       if (!trimmed) return entry.hanzi;
-      // If typing English, append English; if Chinese/pinyin-ish, append hanzi
       const last = trimmed.slice(-1);
       const useEnglish = /[a-zA-Z]/.test(last) && !/[\u4e00-\u9fff]/.test(trimmed);
       const piece = useEnglish ? entry.english : entry.hanzi;
       return `${trimmed}${/[\u4e00-\u9fff]$/.test(trimmed) ? '' : ' '}${piece}`;
     });
+  }
+
+  function useSuggestedFix() {
+    if (!result?.translation) return;
+    setInput(result.translation);
+    setShowFix(false);
+    setResult(null);
+    setSavedMsg('Copied the suggested fix into the box — edit it, then Check again.');
   }
 
   return (
@@ -115,7 +124,10 @@ export function ComposePage() {
         <h1>
           Temper <span className="page-title-zh">炼句</span>
         </h1>
-        <p>Shape a line from what’s already growing. Matches sprout as you type.</p>
+        <p>
+          Write a line, get feedback, then fix it yourself. English → Chinese draft, or Chinese →
+          check without auto-replacing your sentence.
+        </p>
       </header>
 
       <section className="panel stack">
@@ -135,7 +147,7 @@ export function ComposePage() {
             onClick={handleCompose}
             disabled={loading}
           >
-            {loading ? 'Checking…' : 'Check / translate'}
+            {loading ? 'Checking…' : 'Check'}
           </button>
         </div>
         {error && <div className="alert alert-error">{error}</div>}
@@ -148,7 +160,9 @@ export function ComposePage() {
             <h2 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: '1.2rem' }}>
               In your library
             </h2>
-            <span className="muted">{liveMatches.length} match{liveMatches.length === 1 ? '' : 'es'}</span>
+            <span className="muted">
+              {liveMatches.length} match{liveMatches.length === 1 ? '' : 'es'}
+            </span>
           </div>
 
           {liveMatches.length === 0 ? (
@@ -189,30 +203,99 @@ export function ComposePage() {
 
       {result && (
         <section className="panel stack">
-          <div>
-            <div className="muted" style={{ fontWeight: 600, marginBottom: '0.35rem' }}>
-              Result
-            </div>
-            <div
-              className="hanzi-xl"
-              style={{
-                fontSize: /[\u4e00-\u9fff]/.test(result.translation) ? undefined : '1.4rem',
-              }}
-            >
-              {result.translation}
-            </div>
-            {/[\u4e00-\u9fff]/.test(result.translation) && (
-              <div className="pinyin-lg">{toPinyin(result.translation)}</div>
-            )}
-          </div>
-
-          {result.meaning && (
-            <div>
-              <div className="muted" style={{ fontWeight: 600, marginBottom: '0.35rem' }}>
-                Meaning
+          {result.mode === 'check' ? (
+            <>
+              <div
+                className={`alert ${result.ok ? 'alert-info' : 'alert-warn'}`}
+                style={{ margin: 0 }}
+              >
+                {result.ok
+                  ? 'Looks good — keep going, or polish if you want.'
+                  : 'Not quite — see why below, then edit your sentence and Check again.'}
               </div>
-              <div style={{ fontSize: '1.15rem', lineHeight: 1.45 }}>{result.meaning}</div>
-            </div>
+
+              {result.meaning && (
+                <div>
+                  <div className="muted" style={{ fontWeight: 600, marginBottom: '0.35rem' }}>
+                    Meaning (of what you wrote)
+                  </div>
+                  <div style={{ fontSize: '1.15rem', lineHeight: 1.45 }}>{result.meaning}</div>
+                </div>
+              )}
+
+              {result.notes && (
+                <div>
+                  <div className="muted" style={{ fontWeight: 600, marginBottom: '0.35rem' }}>
+                    Feedback
+                  </div>
+                  <div style={{ lineHeight: 1.5 }}>{result.notes}</div>
+                </div>
+              )}
+
+              {!result.ok && result.translation && (
+                <div className="stack" style={{ gap: '0.45rem' }}>
+                  {!showFix ? (
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      onClick={() => setShowFix(true)}
+                    >
+                      Stuck? Reveal a corrected version
+                    </button>
+                  ) : (
+                    <>
+                      <div className="muted" style={{ fontWeight: 600 }}>
+                        One possible fix
+                      </div>
+                      <div className="hanzi-xl">{result.translation}</div>
+                      <div className="pinyin-lg">{toPinyin(result.translation)}</div>
+                      <div className="row">
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          onClick={useSuggestedFix}
+                        >
+                          Put in box to edit
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-ghost"
+                          onClick={() => setShowFix(false)}
+                        >
+                          Hide
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <div>
+                <div className="muted" style={{ fontWeight: 600, marginBottom: '0.35rem' }}>
+                  Chinese draft
+                </div>
+                <div className="hanzi-xl">{result.translation}</div>
+                {result.translation && (
+                  <div className="pinyin-lg">{toPinyin(result.translation)}</div>
+                )}
+              </div>
+              {result.meaning && (
+                <div>
+                  <div className="muted" style={{ fontWeight: 600, marginBottom: '0.35rem' }}>
+                    Meaning
+                  </div>
+                  <div style={{ fontSize: '1.15rem', lineHeight: 1.45 }}>{result.meaning}</div>
+                </div>
+              )}
+              {result.notes && <div className="muted">{result.notes}</div>}
+              {result.translation && (
+                <button type="button" className="btn btn-secondary" onClick={useSuggestedFix}>
+                  Put in box to practise / edit
+                </button>
+              )}
+            </>
           )}
 
           <div className={`alert ${result.usedOnlyLearned ? 'alert-info' : 'alert-warn'}`}>
@@ -220,8 +303,6 @@ export function ComposePage() {
               ? 'Stayed within your learned / library vocabulary.'
               : 'Needed some words outside your current list — see below.'}
           </div>
-
-          {result.notes && <div className="muted">{result.notes}</div>}
 
           {result.unknownWords.length > 0 && (
             <div className="stack">
