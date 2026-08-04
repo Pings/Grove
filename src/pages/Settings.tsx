@@ -35,7 +35,6 @@ import {
   reloadActiveProfile,
   scheduleSyncPush,
   switchSyncProfile,
-  testServerConnection,
 } from '../lib/sync';
 
 export function SettingsPage() {
@@ -104,19 +103,6 @@ export function SettingsPage() {
       setMessage(result === 'pulled' ? 'Reloaded library from the server.' : 'Active profile is empty.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Reload failed.');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleTest() {
-    setBusy(true);
-    setError('');
-    setMessage('');
-    try {
-      setMessage(await testServerConnection());
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not reach the Grove server.');
     } finally {
       setBusy(false);
     }
@@ -425,14 +411,6 @@ export function SettingsPage() {
         <div className="row">
           <button
             type="button"
-            className="btn btn-ghost"
-            disabled={busy}
-            onClick={() => void handleTest()}
-          >
-            Test server
-          </button>
-          <button
-            type="button"
             className="btn btn-secondary"
             disabled={busy}
             onClick={() => void handleReload()}
@@ -491,6 +469,8 @@ export function SettingsPage() {
           {quizMeta?.analysedHsk != null && quizMeta.analysedHsk !== 'unknown'
             ? ` · estimated HSK ${quizMeta.analysedHsk}`
             : ''}
+          {' '}
+          (saved with this profile on the server).
         </p>
         <p className="muted" style={{ margin: 0, fontSize: '0.9rem' }}>
           Gemini analyses your library (learned + recent vocab, HSK 1–3) and generates a fresh

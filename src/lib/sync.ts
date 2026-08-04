@@ -286,22 +286,6 @@ export async function switchSyncProfile(
   return 'empty';
 }
 
-export async function testServerConnection(): Promise<string> {
-  const health = await fetch(apiUrl('/health'));
-  if (!health.ok) throw new Error(`Server not reachable (${health.status}).`);
-  const profiles = await fetchProfiles();
-  const active = profiles.find((p) => p.id === getActiveProfileId()) ?? profiles[0];
-  if (!active) return 'Connected — no profiles yet.';
-  const remote = await pullRemoteSnapshot(active.syncKey);
-  if (!remote) {
-    return `Connected — profile “${active.name}” is empty.`;
-  }
-  return `Connected — “${active.name}” has ${remote.entries?.length ?? 0} entries.`;
-}
-
-/** @deprecated use testServerConnection */
-export const testSyncConnection = testServerConnection;
-
 /** @deprecated use loadLibraryFromServer */
 export async function syncOnBoot(): Promise<'pulled' | 'pushed' | 'skipped' | 'noop'> {
   const result = await loadLibraryFromServer();
