@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { liveQuery } from 'dexie';
 import { db } from '../db/schema';
 import type { VocabEntry } from '../types';
@@ -38,6 +39,8 @@ const MODES: Array<{ id: CardMode; title: string }> = [
 ];
 
 export function FlashcardsPage() {
+  const location = useLocation();
+  const onTendPage = location.pathname === '/flashcards';
   const [entries, setEntries] = useState<VocabEntry[]>([]);
   const [mode, setMode] = useState<CardMode>('hanzi-to-english');
   const [queue, setQueue] = useState<VocabEntry[]>([]);
@@ -51,7 +54,11 @@ export function FlashcardsPage() {
   const [lastOutcome, setLastOutcome] = useState<ReviewOutcome | null>(null);
   const [notesDraft, setNotesDraft] = useState('');
   const settlingRef = useRef(false);
-  const cardStartedAtRef = useRef<number>(0);
+  const remainingMsRef = useRef(0);
+  const activeElapsedRef = useRef(0);
+  const lastTickRef = useRef<number | null>(null);
+  const onTendPageRef = useRef(onTendPage);
+  onTendPageRef.current = onTendPage;
 
   useEffect(() => {
     const sub = liveQuery(() => db.entries.toArray()).subscribe({
@@ -89,38 +96,75 @@ export function FlashcardsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only new card / mode, not DB refresh
   }, [current?.id, mode, index, active]);
 
-  // Timer — skipped for tone drills (listen first, then choose).
+  // Reset per-card timer / response clock (does not depend on route — pause is separate).
   useEffect(() => {
     if (!active || !current || revealed) return;
     settlingRef.current = false;
     setSelectedId(null);
     setShowStudyCard(false);
     setLastOutcome(null);
-    cardStartedAtRef.current = Date.now();
+    activeElapsedRef.current = 0;
+    lastTickRef.current = null;
 
     if (toneMode) {
+      remainingMsRef.current = 0;
       setRemainingMs(0);
       return;
     }
 
-    const started = Date.now();
     const total = current.timerMs || 8000;
+    remainingMsRef.current = total;
     setRemainingMs(total);
-    const id = window.setInterval(() => {
-      const left = Math.max(0, total - (Date.now() - started));
-      setRemainingMs(left);
-      if (left <= 0) {
-        window.clearInterval(id);
+  }, [active, current?.id, index, revealed, mode, toneMode]);
+
+  // Run the countdown only while Tend is the active tab and the browser tab is visible.
+  useEffect(() => {
+    if (!active || !current || revealed || toneMode) return;
+
+    const tick = () => {
+      const now = Date.now();
+      const running = onTendPageRef.current && document.visibilityState === 'visible';
+      if (!running) {
+        lastTickRef.current = null;
+        return;
+      }
+      if (lastTickRef.current == null) {
+        lastTickRef.current = now;
+        return;
+      }
+      const dt = now - lastTickRef.current;
+      lastTickRef.current = now;
+      activeElapsedRef.current += dt;
+      remainingMsRef.current = Math.max(0, remainingMsRef.current - dt);
+      setRemainingMs(remainingMsRef.current);
+      if (remainingMsRef.current <= 0) {
         void settle('timeout');
       }
-    }, 50);
-    return () => window.clearInterval(id);
+    };
+
+    const id = window.setInterval(tick, 50);
+    const onVisibility = () => {
+      if (document.visibilityState !== 'visible') {
+        lastTickRef.current = null;
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisibility);
+      lastTickRef.current = null;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, current?.id, index, revealed, mode]);
+  }, [active, current?.id, index, revealed, mode, toneMode, onTendPage]);
+
+  // Stop speech when leaving Tend mid-session.
+  useEffect(() => {
+    if (!onTendPage) stopPronouncing();
+  }, [onTendPage]);
 
   // Auto-play pronunciation for tone mode (citation tones, Gemini TTS).
   useEffect(() => {
-    if (!active || !current?.hanzi || !toneMode || revealed) return;
+    if (!active || !current?.hanzi || !toneMode || revealed || !onTendPage) return;
     const text = current.hanzi;
     const timer = window.setTimeout(() => {
       void pronounceHanzi(text, { citationTones: true }).catch((err) => {
@@ -131,7 +175,7 @@ export function FlashcardsPage() {
       window.clearTimeout(timer);
       stopPronouncing();
     };
-  }, [active, current?.id, current?.hanzi, toneMode, revealed, index]);
+  }, [active, current?.id, current?.hanzi, toneMode, revealed, index, onTendPage]);
 
   useEffect(() => {
     if (current) setNotesDraft(current.notes || '');
@@ -182,7 +226,7 @@ export function FlashcardsPage() {
     setRevealed(true);
     setLastOutcome(outcome);
     if (pickedId) setSelectedId(pickedId);
-    const responseMs = Date.now() - cardStartedAtRef.current;
+    const responseMs = Math.max(0, Math.round(activeElapsedRef.current));
     const patch = applyReview(current, outcome, responseMs);
     await db.entries.update(current.id, patch);
     setSessionStats((s) => ({
