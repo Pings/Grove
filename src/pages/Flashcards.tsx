@@ -18,6 +18,7 @@ import {
   isPerformanceLearned,
   isToneMode,
   sandhiNoteFor,
+  sandhiSpokenTones,
   type CardMode,
   type LockedQuestion,
   type McOption,
@@ -240,6 +241,7 @@ export function FlashcardsPage() {
   const fast = current ? isPerformanceLearned(current, getLearnedAvgMs()) : false;
   const drill = drillModeFor(mode);
   const sandhiNote = current && toneMode ? sandhiNoteFor(current) : null;
+  const spokenTones = current && toneMode ? sandhiSpokenTones(current) : null;
   const poolSize = filterEntriesForMode(entries, mode).length;
   const citationTones = current && toneMode ? tonesFromPinyin(current.pinyin) : [];
 
@@ -410,11 +412,27 @@ export function FlashcardsPage() {
 
             {revealed && toneMode && (
               <div className="tone-reveal muted">
-                <div className="tone-reveal-visual">
-                  <ToneContour tones={citationTones} size="md" />
-                </div>
-                <div className="pinyin-lg" style={{ marginTop: '0.35rem' }}>
-                  {current.pinyin}
+                <div className="tone-reveal-pair">
+                  <div className="tone-reveal-col">
+                    <div className="tone-reveal-label">Citation (dictionary)</div>
+                    <div className="tone-reveal-visual">
+                      <ToneContour tones={citationTones} size="md" />
+                    </div>
+                    <div className="pinyin-lg" style={{ marginTop: '0.25rem' }}>
+                      {current.pinyin}
+                    </div>
+                  </div>
+                  {spokenTones && (
+                    <div className="tone-reveal-col">
+                      <div className="tone-reveal-label">Spoken (sandhi)</div>
+                      <div className="tone-reveal-visual">
+                        <ToneContour tones={spokenTones} size="md" />
+                      </div>
+                      <div className="muted" style={{ marginTop: '0.25rem', fontSize: '0.85rem' }}>
+                        What you hear
+                      </div>
+                    </div>
+                  )}
                 </div>
                 {sandhiNote && <div className="tone-sandhi-note">{sandhiNote}</div>}
               </div>
@@ -468,8 +486,26 @@ export function FlashcardsPage() {
           </div>
 
           {toneMode && (
-            <div className="tone-reveal-visual" style={{ alignSelf: 'center' }}>
-              <ToneContour tones={tonesFromPinyin(current.pinyin)} size="md" />
+            <div className="stack" style={{ gap: '0.5rem' }}>
+              <div className="tone-reveal-pair">
+                <div className="tone-reveal-col">
+                  <div className="tone-reveal-label">Citation</div>
+                  <div className="tone-reveal-visual" style={{ alignSelf: 'center' }}>
+                    <ToneContour tones={tonesFromPinyin(current.pinyin)} size="md" />
+                  </div>
+                </div>
+                {sandhiSpokenTones(current) && (
+                  <div className="tone-reveal-col">
+                    <div className="tone-reveal-label">Spoken</div>
+                    <div className="tone-reveal-visual" style={{ alignSelf: 'center' }}>
+                      <ToneContour tones={sandhiSpokenTones(current)!} size="md" />
+                    </div>
+                  </div>
+                )}
+              </div>
+              {sandhiNoteFor(current) && (
+                <div className="tone-sandhi-note">{sandhiNoteFor(current)}</div>
+              )}
             </div>
           )}
 

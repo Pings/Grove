@@ -115,24 +115,67 @@ export function formatToneChoice(tones: number[]): { primary: string; secondary:
  */
 export function thirdToneSandhi(tones: number[]): {
   spoken: number[];
+  /** Syllable indexes that flip 3 → 2 when spoken. */
+  changedIndexes: number[];
   note: string | null;
 } {
   const spoken = [...tones];
-  const pairs: number[] = [];
+  const changedIndexes: number[] = [];
   for (let i = 0; i < spoken.length - 1; i += 1) {
     if (tones[i] === 3 && tones[i + 1] === 3) {
       spoken[i] = 2;
-      pairs.push(i);
+      changedIndexes.push(i);
     }
   }
-  if (pairs.length === 0) {
-    return { spoken, note: null };
+  if (changedIndexes.length === 0) {
+    return { spoken, changedIndexes, note: null };
   }
   const citation = formatTonePattern(tones);
   const spokenPat = formatTonePattern(spoken);
   return {
     spoken,
-    note: `Two 3rd tones in a row: citation ${citation}, spoken ${spokenPat} (first 3 → 2). Classic: 你好 nǐ hǎo → ní hǎo.`,
+    changedIndexes,
+    note: `Third-tone sandhi: two 3rd tones in a row — citation ${citation}, spoken ${spokenPat} (first 3 → 2). Classic: 你好 nǐ hǎo → ní hǎo.`,
+  };
+}
+
+/** Learner-facing sandhi note, optionally naming which characters change. */
+export function sandhiExplanation(
+  tones: number[],
+  hanzi = '',
+  pinyinText = '',
+): {
+  spoken: number[];
+  changedIndexes: number[];
+  note: string | null;
+} {
+  const { spoken, changedIndexes, note } = thirdToneSandhi(tones);
+  if (!note || changedIndexes.length === 0) {
+    return { spoken, changedIndexes, note: null };
+  }
+
+  const chars = [...hanzi.replace(/\s+/g, '')];
+  const syllables = pinyinText.trim().split(/\s+/).filter(Boolean);
+  const parts: string[] = [];
+
+  for (const i of changedIndexes) {
+    const ch = chars[i] ?? `syllable ${i + 1}`;
+    const next = chars[i + 1] ?? `syllable ${i + 2}`;
+    const py = syllables[i] ?? '';
+    const pyNext = syllables[i + 1] ?? '';
+    parts.push(
+      `${ch}${py ? ` (${py})` : ''} is 3rd tone alone, but before ${next}${
+        pyNext ? ` (${pyNext})` : ''
+      } (also 3rd) it is spoken as 2nd tone`,
+    );
+  }
+
+  const citation = formatTonePattern(tones);
+  const spokenPat = formatTonePattern(spoken);
+  return {
+    spoken,
+    changedIndexes,
+    note: `Tone change (3rd + 3rd rule): ${parts.join('; ')}. Citation ${citation} → spoken ${spokenPat}.`,
   };
 }
 

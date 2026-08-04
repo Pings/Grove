@@ -6,7 +6,7 @@ import {
   formatToneChoice,
   formatTonePattern,
   normalizePinyinSearch,
-  thirdToneSandhi,
+  sandhiExplanation,
   toneDistractors,
   tonesFromPinyin,
 } from './pinyin';
@@ -239,7 +239,13 @@ export function answerFor(entry: VocabEntry, mode: CardMode): { primary: string;
 
 export function sandhiNoteFor(entry: VocabEntry): string | null {
   const tones = tonesFromPinyin(entry.pinyin);
-  return thirdToneSandhi(tones).note;
+  return sandhiExplanation(tones, entry.hanzi, entry.pinyin).note;
+}
+
+export function sandhiSpokenTones(entry: VocabEntry): number[] | null {
+  const tones = tonesFromPinyin(entry.pinyin);
+  const { spoken, changedIndexes } = sandhiExplanation(tones, entry.hanzi, entry.pinyin);
+  return changedIndexes.length > 0 ? spoken : null;
 }
 
 function optionKey(entry: VocabEntry, mode: CardMode): string {
