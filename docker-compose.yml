@@ -12,6 +12,7 @@ services:
       - "${GROVE_PORT:-8081}:80"
     depends_on:
       - sync
+      - prices
 
   sync:
     build: ./deploy/sync-server
@@ -23,6 +24,20 @@ services:
       - "${SYNC_PORT:-8090}:8090"
     volumes:
       - grove-sync-data:/data
+
+  prices:
+    build: ./tools/price-tracker
+    image: grove-prices:latest
+    pull_policy: build
+    container_name: grove-prices
+    restart: unless-stopped
+    environment:
+      PRICES_HOST: "0.0.0.0"
+      PRICES_PORT: "5050"
+      PRICES_URL_PREFIX: "/prices"
+      PRICES_DB: "/data/prices.db"
+    volumes:
+      - grove-prices-data:/data
 
   # Public HTTPS via Cloudflare Tunnel (optional).
   # Enable with COMPOSE_PROFILES=cloudflare and TUNNEL_TOKEN in .env
@@ -40,3 +55,4 @@ services:
 
 volumes:
   grove-sync-data:
+  grove-prices-data:

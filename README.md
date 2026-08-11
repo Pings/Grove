@@ -7,7 +7,7 @@ One repo / one Docker stack for personal tools on a single domain:
 | `/` | Tools hub (pick an app) |
 | `/grove/` | **Grove** — Chinese vocabulary garden |
 | `/api/` | Grove sync API (word DBs / profiles) |
-| `/prices/` | *(planned)* price tracker |
+| `/prices/` | **Prices** — product price tracker |
 
 Keeping tools together is intentional: one Cloudflare tunnel, one TrueNAS deploy, shared nginx. Add a new tool as another subdirectory (static or its own Vite `base`) rather than a separate repo unless it needs totally different infra.
 
@@ -64,7 +64,8 @@ sudo cp docker-compose.yml compose.yaml
 
 - Hub: `http://<truenas-ip>:8081/` (or `GROVE_PORT` in `.env`)
 - Grove: `http://<truenas-ip>:8081/grove/`
-- Public tunnel: `https://your.domain/` and `https://your.domain/grove/`
+- Prices: `http://<truenas-ip>:8081/prices/`
+- Public tunnel: `https://your.domain/`, `/grove/`, `/prices/`
 
 **4. Update from git**
 
@@ -169,9 +170,18 @@ Nginx proxies `/api` to `grove-sync`, so Cloudflare (and LAN) use the same site 
 
 ### Adding another tool
 
-1. Build or drop static files under e.g. `apps/prices/dist` (or a Vite app with `base: '/prices/'`).
-2. Copy them into the image at `/usr/share/nginx/html/prices/` (extend `Dockerfile`).
-3. Add an nginx `location /prices/` (SPA `try_files` if needed).
+For a **Python/Flask** app (like Prices):
+
+1. Put it under `tools/<name>/` with its own `Dockerfile`.
+2. Add a compose service + volume in `docker-compose.yml`.
+3. Proxy a path in `deploy/nginx.conf` (see `/prices/`).
+4. Link it from `hub/index.html`.
+
+For a **static / Vite** app:
+
+1. Build under e.g. `apps/foo/dist` with `base: '/foo/'`.
+2. Copy into the nginx image at `/usr/share/nginx/html/foo/` (extend root `Dockerfile`).
+3. Add `location /foo/` with SPA `try_files` if needed.
 4. Link it from `hub/index.html`.
 
 ### Notes

@@ -29,3 +29,9 @@ deploy/update.log
 *.njsproj
 *.sln
 *.sw?
+
+# Tool runtimes / local DBs
+tools/**/.venv/
+tools/**/__pycache__/
+tools/**/*.pyc
+tools/price-tracker/data/

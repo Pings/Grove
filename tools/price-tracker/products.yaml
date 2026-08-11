@@ -1,0 +1,6 @@
+# Add products to track. Currency defaults to NZD for these stores.
+products:
+  - name: Haru 2-Seat Sofa Bed – Sapphire Blue Velvet
+    url: https://danskemobler.co.nz/product/4027-Haru-2-Seat-Sofa-Bed-Sapphire-Blue-Velvet
+    currency: NZD
+    notes: First tracked item
