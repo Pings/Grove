@@ -6,7 +6,7 @@ Personal tools on one domain — hub at `/`, apps in subdirectories.
 |------|-----|
 | `/` | **Xin** hub — floating links to each tool |
 | `/grove/` | **Grove** — Chinese vocabulary garden |
-| `/covet/` | **Covet** — wants & price tracker *(coming soon)* |
+| `/covet/` | **Covet** — wants & price tracker |
 | `/api/` | Grove sync API (word DBs / profiles) |
 
 One repo / one Docker stack on purpose: one Cloudflare tunnel, one TrueNAS deploy, shared nginx.
@@ -102,7 +102,8 @@ In Cloudflare Zero Trust, public hostname **`xin.marucat.net`** → service **`h
 
 - Xin hub: `http://<truenas-ip>:8081/` (or `XIN_PORT` in `.env`)
 - Grove: `http://<truenas-ip>:8081/grove/`
-- Public tunnel: `https://your.domain/` and `https://your.domain/grove/`
+- Covet: `http://<truenas-ip>:8081/covet/`
+- Public tunnel: `https://xin.marucat.net/`, `/grove/`, `/covet/`
 
 **4. Update from git**
 
@@ -210,10 +211,13 @@ Nginx proxies `/api` to `xin-sync`, so Cloudflare (and LAN) use the same site or
 
 ### Adding another tool
 
-1. Build or drop static files under e.g. `apps/covet/dist` (Vite `base: '/covet/'`).
-2. Copy them into the image at `/usr/share/nginx/html/covet/` (extend `Dockerfile`).
-3. Add an nginx `location /covet/` (SPA `try_files` if needed).
-4. Turn the Covet float button live in `hub/index.html` (remove `is-soon`).
+1. Drop an app under `tools/<name>/` (or a Vite app with its own `base`).
+2. Add a compose service + volume; proxy it from `deploy/nginx.conf`.
+3. Link it from `hub/index.html`.
+
+### Covet
+
+Python Flask price tracker in `tools/price-tracker/`. Served at **`/covet/`** via `xin-covet`. Data volume: `xin-covet-data`.
 
 ### Notes
 

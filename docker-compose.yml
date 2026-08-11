@@ -12,6 +12,7 @@ services:
       - "${XIN_PORT:-8081}:80"
     depends_on:
       - xin-sync
+      - xin-covet
 
   xin-sync:
     build: ./deploy/sync-server
@@ -24,7 +25,21 @@ services:
     volumes:
       - xin-sync-data:/data
 
-  # Poll GitHub and rebuild xin + xin-sync when main moves (optional).
+  xin-covet:
+    build: ./tools/price-tracker
+    image: xin-covet:latest
+    pull_policy: build
+    container_name: xin-covet
+    restart: unless-stopped
+    environment:
+      PRICES_HOST: "0.0.0.0"
+      PRICES_PORT: "5050"
+      PRICES_URL_PREFIX: "/covet"
+      PRICES_DB: "/data/prices.db"
+    volumes:
+      - xin-covet-data:/data
+
+  # Poll GitHub and rebuild app services when main moves (optional).
   # Enable with COMPOSE_PROFILES containing "watcher".
   # DEPLOY_HOST_PATH must be this stack’s absolute host path (bind-mounted at the
   # same path so `docker compose` via docker.sock resolves build context correctly).
@@ -62,3 +77,4 @@ services:
 
 volumes:
   xin-sync-data:
+  xin-covet-data:

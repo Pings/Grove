@@ -1,0 +1,39 @@
+# Watch list (one-off interest)
+products:
+  - name: Haru 2-Seat Sofa Bed – Sapphire Blue Velvet
+    url: https://danskemobler.co.nz/product/4027-Haru-2-Seat-Sofa-Bed-Sapphire-Blue-Velvet
+    currency: NZD
+    category: watch
+
+  # Restock — Animates cat food (alert on ≥20% special near replacement time)
+  - name: Hill's Science Diet Adult Indoor Cat Food 4kg
+    url: https://www.animates.co.nz/hill-s-science-diet-adult-indoor-dry-cat-food-4kg.html
+    currency: NZD
+    category: repeat
+    days_supply: 45
+    check_lead_days: 14
+    special_threshold_pct: 20
+
+  - name: Hill's Science Diet Ocean Fish Adult Cat Food 85g
+    url: https://www.animates.co.nz/hills-science-diet-ocean-fish-adult-cat-food-85g.html
+    currency: NZD
+    category: repeat
+    days_supply: 7
+    check_lead_days: 5
+    special_threshold_pct: 20
+
+  - name: Hill's Science Diet Chicken Adult Cat Food 85g
+    url: https://www.animates.co.nz/hills-science-diet-chicken-adult-cat-food-85g.html
+    currency: NZD
+    category: repeat
+    days_supply: 7
+    check_lead_days: 5
+    special_threshold_pct: 20
+
+  - name: Hill's Science Diet Adult Poultry Selection Variety Pack 12x85g
+    url: https://www.animates.co.nz/hill-s-science-diet-adult-poultry-selection-variety-pack-12x85g.html
+    currency: NZD
+    category: repeat
+    days_supply: 12
+    check_lead_days: 5
+    special_threshold_pct: 20

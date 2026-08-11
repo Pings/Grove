@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Settings · Covet{% endblock %}
+{% block content %}
+<p class="back"><a href="{{ url_for('index') }}">← Back</a></p>
+
+<section class="panel">
+  <form method="post" action="{{ url_for('save_settings') }}" class="settings-form">
+    <label>
+      <span>Gmail</span>
+      <input type="email" name="gmail_address" value="{{ settings.gmail_address }}" placeholder="you@gmail.com" autocomplete="username" />
+    </label>
+    <label>
+      <span>App password</span>
+      <input type="password" name="gmail_app_password" value="" placeholder="{% if settings.gmail_app_password %}•••••••• (unchanged){% else %}App password{% endif %}" autocomplete="new-password" />
+    </label>
+    <label>
+      <span>Notify to</span>
+      <input type="email" name="notify_to" value="{{ settings.notify_to }}" placeholder="Optional" />
+    </label>
+
+    <label class="check-row">
+      <input type="checkbox" name="notify_enabled" value="1" {% if settings.notify_enabled == '1' %}checked{% endif %} />
+      <span>Email alerts</span>
+    </label>
+
+    <div class="settings-row">
+      <label>
+        <span>Watch drop %</span>
+        <input type="number" name="drop_percent" min="0" step="0.1" value="{{ settings.drop_percent }}" />
+      </label>
+      <label>
+        <span>Watch drop $</span>
+        <input type="number" name="drop_amount" min="0" step="0.01" value="{{ settings.drop_amount }}" />
+      </label>
+    </div>
+
+    <div class="settings-row">
+      <label>
+        <span>Restock special %</span>
+        <input type="number" name="repeat_special_percent" min="0" step="0.1" value="{{ settings.repeat_special_percent }}" />
+      </label>
+      <label>
+        <span>Restock lead days</span>
+        <input type="number" name="repeat_check_lead_days" min="0" step="1" value="{{ settings.repeat_check_lead_days }}" />
+      </label>
+    </div>
+
+    <div class="card-actions">
+      <button type="submit" class="btn primary">Save</button>
+    </div>
+  </form>
+
+  <form method="post" action="{{ url_for('test_email') }}" class="test-email">
+    <button type="submit" class="btn">Test email</button>
+  </form>
+</section>
+{% endblock %}

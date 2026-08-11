@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="panel add-panel">
+  <form method="post" action="{{ url_for('add_product') }}" class="add-form">
+    <label class="grow">
+      <span>URL</span>
+      <input type="url" name="url" required placeholder="Product URL" />
+    </label>
+    <label>
+      <span>Type</span>
+      <select name="category">
+        <option value="watch">Watch</option>
+        <option value="repeat">Restock</option>
+      </select>
+    </label>
+    <button type="submit" class="btn primary">Add</button>
+  </form>
+</section>
+
+{% macro product_card(p, is_restock=false) %}
+<article class="card product {% if is_restock and p.restock and p.restock.in_check_window %}due{% endif %}">
+  <div class="card-head">
+    <div>
+      <h2>
+        <a href="{{ url_for('product_detail', product_id=p.id) }}">{{ p.name|short_name }}</a>
+      </h2>
+      <a class="host" href="{{ p.url }}" target="_blank" rel="noopener">{{ p.url|host }}</a>
+    </div>
+    <div class="price-now">
+      {% if p.price is not none %}
+        <strong>${{ "%.2f"|format(p.price) }}</strong>
+        {% if p.discount_percent %}
+          <span class="badge">−{{ "%.0f"|format(p.discount_percent) }}%</span>
+        {% endif %}
+        <span>{{ p.observed_at[:10] if p.observed_at else "" }}</span>
+      {% else %}
+        <strong>—</strong>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if is_restock %}
+    <div class="stats compact">
+      <div>
+        <em>{% if p.restock and p.restock.food_level_pct is not none %}{{ "%.0f"|format(p.restock.food_level_pct) }}%{% else %}—{% endif %}</em>
+        <span>food</span>
+      </div>
+      <div>
+        <em>{% if p.restock and p.restock.days_left is not none %}{{ "%.0f"|format(p.restock.days_left) }}d{% else %}—{% endif %}</em>
+        <span>left</span>
+      </div>
+      <div>
+        <em>{% if p.restock and p.restock.in_check_window %}yes{% else %}no{% endif %}</em>
+        <span>checking</span>
+      </div>
+    </div>
+    <form method="post" action="{{ url_for('update_restock', product_id=p.id) }}" class="restock-form">
+      <label>
+        <span>Bought</span>
+        <input type="date" name="last_purchased_at" value="{{ p.last_purchased_at or '' }}" />
+      </label>
+      <label>
+        <span>Days/pack</span>
+        <input type="number" name="days_supply" min="1" step="1" value="{{ p.days_supply if p.days_supply is not none else '' }}" />
+      </label>
+      <label>
+        <span>Food %</span>
+        <input type="number" name="food_level_pct" min="0" max="100" step="1" value="{{ p.food_level_pct if p.food_level_pct is not none else '' }}" />
+      </label>
+      <label>
+        <span>Lead days</span>
+        <input type="number" name="check_lead_days" min="0" step="1" value="{{ p.check_lead_days if p.check_lead_days is not none else 14 }}" />
+      </label>
+      <button type="submit" name="action" value="save" class="btn small">Save</button>
+      <button type="submit" name="action" value="bought" class="btn small primary">Bought</button>
+    </form>
+  {% else %}
+    <div class="stats compact">
+      <div><em>{% if p.low is not none %}${{ "%.0f"|format(p.low) }}{% else %}—{% endif %}</em><span>low</span></div>
+      <div><em>{% if p.high is not none %}${{ "%.0f"|format(p.high) }}{% else %}—{% endif %}</em><span>high</span></div>
+      <div><em>{{ p.count }}</em><span>pts</span></div>
+    </div>
+  {% endif %}
+
+  {% if p.points %}
+    <canvas id="chart-{{ p.id }}" height="120"></canvas>
+  {% endif %}
+
+  <div class="card-actions">
+    <form method="post" action="{{ url_for('check_all') }}">
+      <input type="hidden" name="id" value="{{ p.id }}" />
+      {% if is_restock %}<input type="hidden" name="force" value="1" />{% endif %}
+      <button type="submit" class="btn small">Check</button>
+    </form>
+    <a class="btn small" href="{{ url_for('product_detail', product_id=p.id) }}">History</a>
+    <form method="post" action="{{ url_for('delete_product', product_id=p.id) }}" onsubmit="return confirm('Remove?');">
+      <button type="submit" class="btn small danger">Remove</button>
+    </form>
+  </div>
+</article>
+{% endmacro %}
+
+<section class="section-head">
+  <h2>Restock</h2>
+  <form method="post" action="{{ url_for('check_all') }}">
+    <button type="submit" class="btn small">Check due</button>
+  </form>
+</section>
+{% if not restock %}
+  <p class="empty-line">No restock items.</p>
+{% else %}
+  <section class="grid">
+    {% for p in restock %}
+      {{ product_card(p, true) }}
+    {% endfor %}
+  </section>
+{% endif %}
+
+<section class="section-head">
+  <h2>Watch</h2>
+</section>
+{% if not watch %}
+  <p class="empty-line">No watch items.</p>
+{% else %}
+  <section class="grid">
+    {% for p in watch %}
+      {{ product_card(p, false) }}
+    {% endfor %}
+  </section>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const products = {{ (restock + watch)|tojson }};
+  const colors = ["#0f5c4c", "#8a4b2a", "#2c4a6e", "#6b3d5a", "#4a6b2c"];
+  products.forEach((p, i) => {
+    if (!p.points || !p.points.length) return;
+    const el = document.getElementById(`chart-${p.id}`);
+    if (!el) return;
+    new Chart(el, {
+      type: "line",
+      data: {
+        datasets: [{
+          data: p.points.map(pt => ({ x: pt.t, y: pt.price })),
+          borderColor: colors[i % colors.length],
+          backgroundColor: colors[i % colors.length] + "22",
+          tension: 0.25,
+          pointRadius: 2,
+          fill: true,
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { type: "time", time: { unit: "day" }, grid: { display: false }, ticks: { color: "#6b6458", maxTicksLimit: 4 } },
+          y: {
+            grid: { color: "#ebe4d6" },
+            ticks: { color: "#6b6458", callback: v => "$" + Number(v).toLocaleString() }
+          }
+        }
+      }
+    });
+  });
+</script>
+{% endblock %}

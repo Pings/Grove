@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}{{ product.name|short_name }} · Covet{% endblock %}
+{% block content %}
+<p class="back"><a href="{{ url_for('index') }}">← Back</a></p>
+
+<section class="panel">
+  <div class="card-head">
+    <div>
+      <h1 class="detail-title">{{ product.name|short_name }}</h1>
+      <a class="host" href="{{ product.url }}" target="_blank" rel="noopener">{{ product.url|host }}</a>
+    </div>
+    <div class="price-now">
+      {% if latest %}
+        <strong>${{ "%.2f"|format(latest.price) }}</strong>
+        {% if latest.discount_percent %}
+          <span class="badge">−{{ "%.0f"|format(latest.discount_percent) }}%</span>
+        {% endif %}
+        <span>{{ latest.observed_at[:10] }}</span>
+      {% else %}
+        <strong>—</strong>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if product.category == 'repeat' and restock %}
+    <div class="stats compact" style="margin-top: 0.75rem;">
+      <div><em>{% if restock.food_level_pct is not none %}{{ "%.0f"|format(restock.food_level_pct) }}%{% else %}—{% endif %}</em><span>food</span></div>
+      <div><em>{% if restock.days_left is not none %}{{ "%.0f"|format(restock.days_left) }}d{% else %}—{% endif %}</em><span>left</span></div>
+      <div><em>{% if restock.in_check_window %}yes{% else %}no{% endif %}</em><span>checking</span></div>
+    </div>
+  {% endif %}
+
+  <div class="card-actions" style="margin-top: 0.85rem;">
+    <form method="post" action="{{ url_for('check_all') }}">
+      <input type="hidden" name="id" value="{{ product.id }}" />
+      {% if product.category == 'repeat' %}<input type="hidden" name="force" value="1" />{% endif %}
+      <button type="submit" class="btn primary">Check</button>
+    </form>
+  </div>
+
+  {% if points %}
+    <canvas id="detail-chart" height="200" style="margin-top: 1rem;"></canvas>
+  {% endif %}
+</section>
+
+{% if points %}
+<section class="panel">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Date</th><th>Price</th><th>Src</th></tr>
+      </thead>
+      <tbody>
+        {% for pt in points|reverse %}
+          <tr>
+            <td>{{ pt.observed_at[:10] }}</td>
+            <td>${{ "%.0f"|format(pt.price) }}</td>
+            <td>{{ pt.source }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if points %}
+<script>
+  const points = {{ points|map(attribute='observed_at')|list|tojson }};
+  const prices = {{ points|map(attribute='price')|list|tojson }};
+  new Chart(document.getElementById("detail-chart"), {
+    type: "line",
+    data: {
+      datasets: [{
+        data: points.map((t, i) => ({ x: t, y: prices[i] })),
+        borderColor: "#0f5c4c",
+        backgroundColor: "#0f5c4c22",
+        tension: 0.25,
+        pointRadius: 2,
+        fill: true,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { type: "time", time: { unit: "day" }, grid: { display: false } },
+        y: {
+          grid: { color: "#ebe4d6" },
+          ticks: { callback: v => "$" + Number(v).toLocaleString() }
+        }
+      }
+    }
+  });
+</script>
+{% endif %}
+{% endblock %}
