@@ -19,6 +19,10 @@ DEFAULT_SETTINGS = {
     "repeat_check_lead_days": "7",
     "wet_daily_use": "1",
     "dry_daily_g": "87",
+    "wet_stock_on_hand": "",
+    "wet_stock_set_at": "",
+    "dry_stock_on_hand": "",
+    "dry_stock_set_at": "",
 }
 
 PRODUCT_COLUMNS = {
@@ -228,6 +232,127 @@ def upsert_product(
     return _row_product(row)
 
 
+def _optional_float(value) -> Optional[float]:
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        return float(text)
+    except ValueError:
+        return None
+
+
+def pantry_stock(settings: dict[str, str], kind: str) -> tuple[Optional[float], Optional[str]]:
+    kind = (kind or "").strip().lower()
+    if kind == "wet":
+        return _optional_float(settings.get("wet_stock_on_hand")), (
+            settings.get("wet_stock_set_at") or None
+        ) or None
+    if kind == "dry":
+        return _optional_float(settings.get("dry_stock_on_hand")), (
+            settings.get("dry_stock_set_at") or None
+        ) or None
+    return None, None
+
+
+def set_pantry_stock(
+    conn: sqlite3.Connection,
+    *,
+    wet_on_hand: Optional[float] = None,
+    dry_on_hand: Optional[float] = None,
+    set_at: Optional[str] = None,
+) -> dict[str, str]:
+    today = (set_at or datetime.now(timezone.utc).date().isoformat())[:10]
+    values: dict[str, str] = {}
+    if wet_on_hand is not None:
+        values["wet_stock_on_hand"] = str(wet_on_hand)
+        values["wet_stock_set_at"] = today
+    if dry_on_hand is not None:
+        values["dry_stock_on_hand"] = str(dry_on_hand)
+        values["dry_stock_set_at"] = today
+    if not values:
+        return get_settings(conn)
+    return update_settings(conn, values)
+
+
+def add_to_pantry(
+    conn: sqlite3.Connection,
+    kind: str,
+    amount: float,
+    *,
+    set_at: Optional[str] = None,
+) -> dict[str, str]:
+    """Decay current global pantry for kind, then add amount."""
+    from .restock import estimate_restock
+
+    kind = (kind or "").strip().lower()
+    if kind not in {"wet", "dry"} or amount is None:
+        return get_settings(conn)
+
+    settings = get_settings(conn)
+    lead = int(float(settings.get("repeat_check_lead_days") or 7))
+    wet_daily = float(settings.get("wet_daily_use") or 1)
+    dry_daily = float(settings.get("dry_daily_g") or 87)
+    on_hand, stock_set = pantry_stock(settings, kind)
+    current = 0.0
+    if on_hand is not None:
+        status = estimate_restock(
+            check_lead_days=lead,
+            stock_kind=kind,
+            stock_on_hand=on_hand,
+            stock_set_at=stock_set,
+            wet_daily=wet_daily,
+            dry_daily_g=dry_daily,
+        )
+        current = float(status.stock_on_hand or 0.0)
+    new_total = current + float(amount)
+    today = (set_at or datetime.now(timezone.utc).date().isoformat())[:10]
+    if kind == "wet":
+        return set_pantry_stock(conn, wet_on_hand=new_total, set_at=today)
+    return set_pantry_stock(conn, dry_on_hand=new_total, set_at=today)
+
+
+def update_product_kind(
+    conn: sqlite3.Connection,
+    product_id: int,
+    *,
+    stock_kind: Optional[str] = None,
+    pack_units: Optional[float] = None,
+    special_threshold_pct: Optional[float] = None,
+) -> Optional[Product]:
+    product = get_product(conn, product_id)
+    if not product:
+        return None
+
+    kind = product.stock_kind
+    if stock_kind is not None:
+        cleaned = stock_kind.strip().lower()
+        if cleaned in {"", "none", "-"}:
+            kind = None
+        elif cleaned in {"wet", "dry"}:
+            kind = cleaned
+    units = pack_units if pack_units is not None else product.pack_units
+    threshold = (
+        special_threshold_pct
+        if special_threshold_pct is not None
+        else product.special_threshold_pct
+    )
+    conn.execute(
+        """
+        UPDATE products SET
+            stock_kind = ?,
+            pack_units = ?,
+            special_threshold_pct = ?
+        WHERE id = ?
+        """,
+        (kind, units, threshold, product_id),
+    )
+    conn.commit()
+    return get_product(conn, product_id)
+
+
 def update_restock(
     conn: sqlite3.Connection,
     product_id: int,
@@ -246,23 +371,25 @@ def update_restock(
     if not product:
         return None
 
+    # Kind / pack size updates (primary path for restock products)
+    if stock_kind is not None or pack_units is not None or special_threshold_pct is not None:
+        product = update_product_kind(
+            conn,
+            product_id,
+            stock_kind=stock_kind if stock_kind is not None else product.stock_kind,
+            pack_units=pack_units,
+            special_threshold_pct=special_threshold_pct,
+        ) or product
+
     purchased = last_purchased_at if last_purchased_at is not None else product.last_purchased_at
     supply = days_supply if days_supply is not None else product.days_supply
     level = food_level_pct if food_level_pct is not None else product.food_level_pct
     lead = check_lead_days if check_lead_days is not None else product.check_lead_days
-    threshold = (
-        special_threshold_pct
-        if special_threshold_pct is not None
-        else product.special_threshold_pct
-    )
+    threshold = product.special_threshold_pct
     level_set = product.food_level_set_at
-    kind = stock_kind if stock_kind is not None else product.stock_kind
-    if kind:
-        kind = kind.strip().lower()
-        if kind not in {"wet", "dry"}:
-            kind = product.stock_kind
-    units = pack_units if pack_units is not None else product.pack_units
-    on_hand = stock_on_hand if stock_on_hand is not None else product.stock_on_hand
+    kind = product.stock_kind
+    units = product.pack_units
+    on_hand = product.stock_on_hand
     stock_set = product.stock_set_at
     today = datetime.now(timezone.utc).date().isoformat()
 
@@ -270,40 +397,20 @@ def update_restock(
         purchased = (last_purchased_at or today)[:10]
         add = float(units) if units is not None else None
         if kind in {"wet", "dry"} and add is not None:
-            # Buying adds a pack/bag onto current estimated remaining stock.
-            current = float(on_hand) if on_hand is not None else 0.0
-            # Decay from last set before adding, so "bought" stacks on what's left.
-            if product.stock_set_at and on_hand is not None:
-                from .restock import estimate_restock
-
-                settings = get_settings(conn)
-                status = estimate_restock(
-                    last_purchased_at=product.last_purchased_at,
-                    days_supply=product.days_supply,
-                    food_level_pct=product.food_level_pct,
-                    food_level_set_at=product.food_level_set_at,
-                    check_lead_days=int(lead or settings.get("repeat_check_lead_days") or 7),
-                    stock_kind=kind,
-                    stock_on_hand=on_hand,
-                    stock_set_at=product.stock_set_at,
-                    wet_daily=float(settings.get("wet_daily_use") or 1),
-                    dry_daily_g=float(settings.get("dry_daily_g") or 87),
-                )
-                current = float(status.stock_on_hand or 0.0)
-            on_hand = current + add
-            stock_set = purchased
+            add_to_pantry(conn, kind, add, set_at=purchased)
             level = 100.0
             level_set = purchased
         else:
             level = 100.0 if food_level_pct is None else float(food_level_pct)
             level_set = purchased
-    elif stock_on_hand is not None:
-        on_hand = float(stock_on_hand)
-        stock_set = today
-        level_set = today
     elif food_level_pct is not None:
         level = float(food_level_pct)
         level_set = today
+
+    # Per-product stock fields kept for legacy rows but no longer the source of truth
+    if stock_on_hand is not None:
+        on_hand = float(stock_on_hand)
+        stock_set = today
 
     conn.execute(
         """

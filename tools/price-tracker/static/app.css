@@ -407,6 +407,20 @@ th {
   background: #fff;
 }
 
+.restock-form select {
+  width: 100%;
+  min-width: 5.5rem;
+  padding: 0.4rem 0.5rem;
+}
+
+.pantry-stock-form {
+  margin-top: 0.85rem;
+}
+
+.pantry-stats {
+  margin-top: 0.9rem;
+}
+
 select {
   width: 100%;
   border: 1px solid var(--line);

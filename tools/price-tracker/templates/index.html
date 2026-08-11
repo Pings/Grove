@@ -41,21 +41,16 @@
 
   {% if is_restock %}
     <div class="stats compact">
-      {% if p.stock_kind in ['wet', 'dry'] %}
       <div>
         <em>
-          {% if p.restock and p.restock.stock_on_hand is not none %}
-            {% if p.stock_kind == 'dry' %}{{ "%.0f"|format(p.restock.stock_on_hand) }}g{% else %}{{ "%.1f"|format(p.restock.stock_on_hand)|replace('.0','') }}{% endif %}
+          {% if p.stock_kind == 'dry' and p.restock and p.restock.stock_on_hand is not none %}
+            {{ "%.0f"|format(p.restock.stock_on_hand) }}g
+          {% elif p.stock_kind == 'wet' and p.restock and p.restock.stock_on_hand is not none %}
+            {{ "%.1f"|format(p.restock.stock_on_hand)|replace('.0','') }}
           {% else %}—{% endif %}
         </em>
-        <span>{% if p.stock_kind == 'dry' %}left{% else %}packs{% endif %}</span>
+        <span>pantry</span>
       </div>
-      {% else %}
-      <div>
-        <em>{% if p.restock and p.restock.food_level_pct is not none %}{{ "%.0f"|format(p.restock.food_level_pct) }}%{% else %}—{% endif %}</em>
-        <span>food</span>
-      </div>
-      {% endif %}
       <div>
         <em>{% if p.restock and p.restock.days_left is not none %}{{ "%.0f"|format(p.restock.days_left) }}d{% else %}—{% endif %}</em>
         <span>left</span>
@@ -65,30 +60,23 @@
         <span>checking</span>
       </div>
     </div>
-    {% if p.stock_kind in ['wet', 'dry'] %}
-      <p class="muted-line"><a href="{{ url_for('pantry_page') }}">Manage stock on Pantry →</a></p>
-    {% else %}
     <form method="post" action="{{ url_for('update_restock', product_id=p.id) }}" class="restock-form">
       <label>
-        <span>Bought</span>
-        <input type="date" name="last_purchased_at" value="{{ p.last_purchased_at or '' }}" />
+        <span>Kind</span>
+        <select name="stock_kind">
+          <option value="none" {% if not p.stock_kind %}selected{% endif %}>—</option>
+          <option value="wet" {% if p.stock_kind == 'wet' %}selected{% endif %}>Wet</option>
+          <option value="dry" {% if p.stock_kind == 'dry' %}selected{% endif %}>Dry</option>
+        </select>
       </label>
       <label>
-        <span>Days/pack</span>
-        <input type="number" name="days_supply" min="1" step="1" value="{{ p.days_supply if p.days_supply is not none else '' }}" />
-      </label>
-      <label>
-        <span>Food %</span>
-        <input type="number" name="food_level_pct" min="0" max="100" step="1" value="{{ p.food_level_pct if p.food_level_pct is not none else '' }}" />
-      </label>
-      <label>
-        <span>Lead days</span>
-        <input type="number" name="check_lead_days" min="0" step="1" value="{{ p.check_lead_days if p.check_lead_days is not none else 7 }}" />
+        <span>Pack size</span>
+        <input type="number" name="pack_units" min="0" step="1" value="{{ p.pack_units if p.pack_units is not none else '' }}" placeholder="{% if p.stock_kind == 'dry' %}g{% else %}packs{% endif %}" />
       </label>
       <button type="submit" name="action" value="save" class="btn small">Save</button>
       <button type="submit" name="action" value="bought" class="btn small primary">Bought</button>
     </form>
-    {% endif %}
+    <p class="muted-line"><a href="{{ url_for('pantry_page') }}">Edit global stock on Pantry →</a></p>
   {% else %}
     <div class="stats compact">
       <div><em>{% if p.low is not none %}${{ "%.0f"|format(p.low) }}{% else %}—{% endif %}</em><span>low</span></div>

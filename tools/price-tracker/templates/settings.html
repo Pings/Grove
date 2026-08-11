@@ -40,7 +40,7 @@
         <input type="number" name="repeat_special_percent" min="0" step="0.1" value="{{ settings.repeat_special_percent }}" />
       </label>
       <label>
-        <span>Restock lead days</span>
+        <span>Pantry lead days</span>
         <input type="number" name="repeat_check_lead_days" min="0" step="1" value="{{ settings.repeat_check_lead_days }}" />
       </label>
     </div>
@@ -55,6 +55,8 @@
         <input type="number" name="dry_daily_g" min="0" step="1" value="{{ settings.dry_daily_g }}" />
       </label>
     </div>
+
+    <p class="muted-line">Set current wet packs and dry grams on <a href="{{ url_for('pantry_page') }}">Pantry</a>.</p>
 
     <div class="card-actions">
       <button type="submit" class="btn primary">Save</button>
