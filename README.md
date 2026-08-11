@@ -1,15 +1,15 @@
-# Tools (Grove + friends)
+# Xin (心)
 
-One repo / one Docker stack for personal tools on a single domain:
+Personal tools on one domain — hub at `/`, apps in subdirectories.
 
 | Path | App |
 |------|-----|
-| `/` | Tools hub (pick an app) |
+| `/` | **Xin** hub — floating links to each tool |
 | `/grove/` | **Grove** — Chinese vocabulary garden |
+| `/covet/` | **Covet** — wants & price tracker *(coming soon)* |
 | `/api/` | Grove sync API (word DBs / profiles) |
-| `/prices/` | *(planned)* price tracker |
 
-Keeping tools together is intentional: one Cloudflare tunnel, one TrueNAS deploy, shared nginx. Add a new tool as another subdirectory (static or its own Vite `base`) rather than a separate repo unless it needs totally different infra.
+One repo / one Docker stack on purpose: one Cloudflare tunnel, one TrueNAS deploy, shared nginx.
 
 ## Grove
 
@@ -62,7 +62,7 @@ sudo cp docker-compose.yml compose.yaml
 
 **3. Open the apps**
 
-- Hub: `http://<truenas-ip>:8081/` (or `GROVE_PORT` in `.env`)
+- Xin hub: `http://<truenas-ip>:8081/` (or `GROVE_PORT` in `.env`)
 - Grove: `http://<truenas-ip>:8081/grove/`
 - Public tunnel: `https://your.domain/` and `https://your.domain/grove/`
 
@@ -172,14 +172,14 @@ Nginx proxies `/api` to `grove-sync`, so Cloudflare (and LAN) use the same site 
 
 ### Adding another tool
 
-1. Build or drop static files under e.g. `apps/prices/dist` (or a Vite app with `base: '/prices/'`).
-2. Copy them into the image at `/usr/share/nginx/html/prices/` (extend `Dockerfile`).
-3. Add an nginx `location /prices/` (SPA `try_files` if needed).
-4. Link it from `hub/index.html`.
+1. Build or drop static files under e.g. `apps/covet/dist` (Vite `base: '/covet/'`).
+2. Copy them into the image at `/usr/share/nginx/html/covet/` (extend `Dockerfile`).
+3. Add an nginx `location /covet/` (SPA `try_files` if needed).
+4. Turn the Covet float button live in `hub/index.html` (remove `is-soon`).
 
 ### Notes
 
 - Put **`GROVE_PORT`** (and tunnel settings) in `.env` — auto-update regenerates `compose.yaml` from `docker-compose.yml` but keeps `.env`.
 - **Gemini key**: Settings in each browser; restrict by HTTP referrer in [Google AI Studio](https://aistudio.google.com/) for your public URL.
 - Auto-update tracks **`main`**.
-- Rename the hub title in `hub/index.html` whenever you settle on a domain/brand name.
+- Hub brand lives in `hub/index.html` (**Xin** / **心**).
