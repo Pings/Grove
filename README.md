@@ -217,7 +217,7 @@ Nginx proxies `/api` to `xin-sync`, so Cloudflare (and LAN) use the same site or
 
 ### Notes
 
-- Put **`GROVE_PORT`** (and tunnel settings) in `.env` — auto-update regenerates `compose.yaml` from `docker-compose.yml` but keeps `.env`.
+- Put **`XIN_PORT`** (and tunnel settings) in `.env` — auto-update regenerates `compose.yaml` from `docker-compose.yml` but keeps `.env`.
 - **Gemini key**: Settings in each browser; restrict by HTTP referrer in [Google AI Studio](https://aistudio.google.com/) for your public URL.
 - Auto-update tracks **`main`**.
 - Hub brand lives in `hub/index.html` (**Xin** / **心**).
