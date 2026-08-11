@@ -94,11 +94,11 @@ sudo ./deploy/deploy.sh
 
 `compose.yaml` is local-only (gitignored). Git tracks `docker-compose.yml`; deploy copies it to `compose.yaml` after each update. Put ports and the tunnel token in `.env`, not in the compose file.
 
-### Auto-update from git (recommended)
+### Auto-update from git (recommended: deploy watcher)
 
-Keeps TrueNAS on latest `main` without typing commands. Ports and tunnel token stay in `.env` (`GROVE_PORT`, `TUNNEL_TOKEN`) so updates don’t wipe them.
+A small **deploy-watcher** container polls `origin/main` and rebuilds only `grove` + `sync` when the branch moves (same idea as Rubric Marker). It does **not** recreate cloudflared or itself, so the tunnel stays up.
 
-**1. Put your host port + tunnel in `.env`** (once):
+**1. Put ports, tunnel, and watcher settings in `.env`:**
 
 ```bash
 cd /mnt/Maru/Apps/Dockge/stacks/grove
@@ -110,31 +110,34 @@ Example:
 ```env
 GROVE_PORT=8081
 SYNC_PORT=8090
-COMPOSE_PROFILES=cloudflare
+COMPOSE_PROFILES=cloudflare,watcher
 TUNNEL_TOKEN=your-token-here
+DEPLOY_HOST_PATH=/mnt/Maru/Apps/Dockge/stacks/grove
+DEPLOY_BRANCH=main
+POLL_SECONDS=60
 ```
 
-**2. Install the daily cron job** (as root):
+`DEPLOY_HOST_PATH` must be the **absolute host path** of this stack (Dockge bind-mounts it at the same path inside the watcher so `docker compose` via `docker.sock` works).
+
+**2. Redeploy** in Dockge (or `docker compose --profile watcher up -d --build`). You should see `grove-deploy-watcher` alongside `grove` / `grove-sync`.
+
+Logs: Dockge → grove-deploy-watcher, or `docker logs -f grove-deploy-watcher`.
+
+Manual one-shot update is still available:
 
 ```bash
-cd /mnt/Maru/Apps/Dockge/stacks/grove
-sudo chmod +x deploy/deploy.sh deploy/install-cron.sh
+sudo ./deploy/deploy.sh
+```
+
+#### Fallback: host cron
+
+If you prefer cron instead of the watcher container:
+
+```bash
 sudo ./deploy/install-cron.sh
 ```
 
-Default schedule: **04:15 daily**. Logs: `deploy/update.log`.
-
-**3. Optional — TrueNAS UI cron instead**
-
-System → Advanced → Cron Jobs → add:
-
-| Field | Value |
-|-------|-------|
-| Command | `/mnt/Maru/Apps/Dockge/stacks/grove/deploy/deploy.sh >> /mnt/Maru/Apps/Dockge/stacks/grove/deploy/update.log 2>&1` |
-| Schedule | e.g. daily 4:15 AM |
-| User | `root` |
-
-The script **skips** when there is nothing new on `origin/main`, so it’s safe to run often.
+Default schedule: **04:15 daily**. Logs: `deploy/update.log`. Don’t run both cron and the watcher unless you want competing updates.
 
 ### Public HTTPS with Cloudflare Tunnel
 
@@ -148,9 +151,9 @@ The script **skips** when there is nothing new on `origin/main`, so it’s safe 
 TUNNEL_TOKEN=paste-your-token-here
 ```
 
-Simplest: remove the `profiles: [cloudflare]` block from `cloudflared` in compose so it always starts with the stack (as many Dockge setups do). Or set `COMPOSE_PROFILES=cloudflare` in `.env`.
+Simplest: remove the `profiles: [cloudflare]` block from `cloudflared` in compose so it always starts with the stack (as many Dockge setups do). Or set `COMPOSE_PROFILES=cloudflare,watcher` in `.env`.
 
-**4.** Redeploy. You should see `grove`, `grove-sync`, and `grove-cloudflared`.
+**4.** Redeploy. You should see `grove`, `grove-sync`, `grove-cloudflared`, and (if enabled) `grove-deploy-watcher`.
 
 Do **not** put `COMPOSE_PROFILES` or the token on the `grove` service — only on `.env` / `cloudflared`.
 

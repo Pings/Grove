@@ -24,6 +24,28 @@ services:
     volumes:
       - grove-sync-data:/data
 
+  # Poll GitHub and rebuild grove+sync when main moves (optional).
+  # Enable with COMPOSE_PROFILES containing "watcher".
+  # DEPLOY_HOST_PATH must be this stack’s absolute host path (bind-mounted at the
+  # same path so `docker compose` via docker.sock resolves build context correctly).
+  deploy-watcher:
+    build: ./deploy/watcher
+    image: grove-deploy-watcher:latest
+    pull_policy: build
+    container_name: grove-deploy-watcher
+    restart: unless-stopped
+    environment:
+      DEPLOY_BRANCH: ${DEPLOY_BRANCH:-main}
+      POLL_SECONDS: ${POLL_SECONDS:-60}
+      REPO_DIR: ${DEPLOY_HOST_PATH:-/mnt/Maru/Apps/Dockge/stacks/grove}
+      DEPLOY_SSH_KEY: ${DEPLOY_SSH_KEY:-}
+    volumes:
+      - ${DEPLOY_HOST_PATH:-/mnt/Maru/Apps/Dockge/stacks/grove}:${DEPLOY_HOST_PATH:-/mnt/Maru/Apps/Dockge/stacks/grove}
+      - /var/run/docker.sock:/var/run/docker.sock
+    working_dir: ${DEPLOY_HOST_PATH:-/mnt/Maru/Apps/Dockge/stacks/grove}
+    profiles:
+      - watcher
+
   # Public HTTPS via Cloudflare Tunnel (optional).
   # Enable with COMPOSE_PROFILES=cloudflare and TUNNEL_TOKEN in .env
   cloudflared:
