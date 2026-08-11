@@ -90,7 +90,7 @@ sudo docker restart xin-sync
 
 Rescan / open the **xin** stack in Dockge and deploy again.
 
-In Cloudflare Zero Trust, set the public hostname service to **`http://xin:80`** (Docker service name).
+In Cloudflare Zero Trust, public hostname **`xin.marucat.net`** → service **`http://xin:80`**.
 
 **2. Deploy in Dockge**
 
@@ -181,7 +181,7 @@ Default schedule: **04:15 daily**. Logs: `deploy/update.log`. Don’t run both c
 
 **1.** Cloudflare Zero Trust → **Networks** → **Tunnels** → create tunnel → copy token.
 
-**2.** Public hostname: your domain → HTTP → `xin:80` (Docker service name, not the host port).
+**2.** Public hostname: e.g. `xin.marucat.net` → HTTP → `http://xin:80` (Docker service name, not the host port).
 
 **3.** Stack `.env` (Dockge env editor — one file for the whole stack):
 
