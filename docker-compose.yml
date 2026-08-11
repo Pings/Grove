@@ -1,38 +1,38 @@
 services:
-  grove:
+  xin:
     build:
       context: .
       dockerfile: Dockerfile
-    image: grove:latest
+    image: xin:latest
     pull_policy: build
-    container_name: grove
+    container_name: xin
     restart: unless-stopped
     ports:
-      # Host port from .env (GROVE_PORT) so auto-updates don't wipe your custom port
-      - "${GROVE_PORT:-8081}:80"
+      # Host port from .env (XIN_PORT) so auto-updates don't wipe your custom port
+      - "${XIN_PORT:-8081}:80"
     depends_on:
-      - sync
+      - xin-sync
 
-  sync:
+  xin-sync:
     build: ./deploy/sync-server
-    image: grove-sync:latest
+    image: xin-sync:latest
     pull_policy: build
-    container_name: grove-sync
+    container_name: xin-sync
     restart: unless-stopped
     ports:
       - "${SYNC_PORT:-8090}:8090"
     volumes:
-      - grove-sync-data:/data
+      - xin-sync-data:/data
 
-  # Poll GitHub and rebuild grove+sync when main moves (optional).
+  # Poll GitHub and rebuild xin + xin-sync when main moves (optional).
   # Enable with COMPOSE_PROFILES containing "watcher".
   # DEPLOY_HOST_PATH must be this stack’s absolute host path (bind-mounted at the
   # same path so `docker compose` via docker.sock resolves build context correctly).
   deploy-watcher:
     build: ./deploy/watcher
-    image: grove-deploy-watcher:latest
+    image: xin-deploy-watcher:latest
     pull_policy: build
-    container_name: grove-deploy-watcher
+    container_name: xin-deploy-watcher
     restart: unless-stopped
     environment:
       DEPLOY_BRANCH: ${DEPLOY_BRANCH:-main}
@@ -50,15 +50,15 @@ services:
   # Enable with COMPOSE_PROFILES=cloudflare and TUNNEL_TOKEN in .env
   cloudflared:
     image: cloudflare/cloudflared:latest
-    container_name: grove-cloudflared
+    container_name: xin-cloudflared
     restart: unless-stopped
     command: tunnel --no-autoupdate run
     environment:
       TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}
     depends_on:
-      - grove
+      - xin
     profiles:
       - cloudflare
 
 volumes:
-  grove-sync-data:
+  xin-sync-data:

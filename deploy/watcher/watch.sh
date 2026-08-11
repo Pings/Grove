@@ -47,7 +47,7 @@ while true; do
 
     # Rebuild app services only — do not recreate cloudflared or this watcher
     # (full `compose up --build` restarts the tunnel and can kill this process).
-    docker compose up -d --build --no-deps grove sync
+    docker compose up -d --build --no-deps xin xin-sync
     echo "deploy-watcher: rebuild finished at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
   fi
 

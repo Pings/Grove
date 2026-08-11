@@ -11,7 +11,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 BRANCH="${GROVE_BRANCH:-main}"
-LOG_TAG="[grove-update $(date '+%Y-%m-%d %H:%M:%S')]"
+LOG_TAG="[xin-update $(date '+%Y-%m-%d %H:%M:%S')]"
 
 mkdir -p "$ROOT/deploy"
 LOCK="$ROOT/deploy/.update.lock"
@@ -63,7 +63,7 @@ else
   exit 1
 fi
 
-PORT="$(grep -E '^GROVE_PORT=' .env 2>/dev/null | cut -d= -f2- || true)"
+PORT="$(grep -E '^XIN_PORT=' .env 2>/dev/null | cut -d= -f2- || true)"
 PORT="${PORT:-8081}"
 echo "$LOG_TAG done — now on $(git rev-parse --short HEAD) (host port ${PORT})"
 if [[ -f .env ]] && grep -q '^COMPOSE_PROFILES=.*cloudflare' .env 2>/dev/null; then

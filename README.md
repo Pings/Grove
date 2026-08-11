@@ -21,7 +21,7 @@ Vite + React (HSK-focused): Shelf, Gather, Tend, Temper, Forms. Lives at **`/gro
 
 | Data | Location |
 |------|----------|
-| Word list & quiz questions | Grove server (`grove-sync`), same host as the site |
+| Word list & quiz questions | Grove server (`xin-sync`), same host as the site |
 | Profiles (Nikko + extras) | Grove server — each profile is its own database |
 | Gemini API key (and model / learned threshold) | Browser only |
 
@@ -71,9 +71,26 @@ Then set in `.env`:
 
 ```env
 DEPLOY_HOST_PATH=/mnt/Maru/Apps/Dockge/stacks/xin
+XIN_PORT=8081
+COMPOSE_PROFILES=cloudflare,watcher
+```
+
+(Replace old `GROVE_PORT` with `XIN_PORT` if present.)
+
+**Word DB volume:** the sync volume is now `xin-sync-data`. If you already had data under the old `grove` stack, copy it once after the first deploy creates the new volume:
+
+```bash
+# Adjust volume names from: docker volume ls | grep sync
+sudo docker run --rm \
+  -v grove_grove-sync-data:/from \
+  -v xin_xin-sync-data:/to \
+  alpine sh -c 'cd /from && cp -a . /to/'
+sudo docker restart xin-sync
 ```
 
 Rescan / open the **xin** stack in Dockge and deploy again.
+
+In Cloudflare Zero Trust, set the public hostname service to **`http://xin:80`** (Docker service name).
 
 **2. Deploy in Dockge**
 
@@ -83,7 +100,7 @@ Rescan / open the **xin** stack in Dockge and deploy again.
 
 **3. Open the apps**
 
-- Xin hub: `http://<truenas-ip>:8081/` (or `GROVE_PORT` in `.env`)
+- Xin hub: `http://<truenas-ip>:8081/` (or `XIN_PORT` in `.env`)
 - Grove: `http://<truenas-ip>:8081/grove/`
 - Public tunnel: `https://your.domain/` and `https://your.domain/grove/`
 
@@ -117,7 +134,7 @@ sudo ./deploy/deploy.sh
 
 ### Auto-update from git (recommended: deploy watcher)
 
-A small **deploy-watcher** container polls `origin/main` and rebuilds only `grove` + `sync` when the branch moves (same idea as Rubric Marker). It does **not** recreate cloudflared or itself, so the tunnel stays up.
+A small **deploy-watcher** container polls `origin/main` and rebuilds only `xin` + `xin-sync` when the branch moves (same idea as Rubric Marker). It does **not** recreate cloudflared or itself, so the tunnel stays up.
 
 **1. Put ports, tunnel, and watcher settings in `.env`:**
 
@@ -129,7 +146,7 @@ sudo nano .env
 Example:
 
 ```env
-GROVE_PORT=8081
+XIN_PORT=8081
 SYNC_PORT=8090
 COMPOSE_PROFILES=cloudflare,watcher
 TUNNEL_TOKEN=your-token-here
@@ -140,9 +157,9 @@ POLL_SECONDS=60
 
 `DEPLOY_HOST_PATH` must be the **absolute host path** of this stack (Dockge bind-mounts it at the same path inside the watcher so `docker compose` via `docker.sock` works).
 
-**2. Redeploy** in Dockge (or `docker compose --profile watcher up -d --build`). You should see `grove-deploy-watcher` alongside `grove` / `grove-sync`.
+**2. Redeploy** in Dockge (or `docker compose --profile watcher up -d --build`). You should see `xin-deploy-watcher` alongside `xin` / `xin-sync`.
 
-Logs: Dockge → grove-deploy-watcher, or `docker logs -f grove-deploy-watcher`.
+Logs: Dockge → xin-deploy-watcher, or `docker logs -f xin-deploy-watcher`.
 
 Manual one-shot update is still available:
 
@@ -164,7 +181,7 @@ Default schedule: **04:15 daily**. Logs: `deploy/update.log`. Don’t run both c
 
 **1.** Cloudflare Zero Trust → **Networks** → **Tunnels** → create tunnel → copy token.
 
-**2.** Public hostname: your domain → HTTP → `grove:80` (Docker service name, not the host port).
+**2.** Public hostname: your domain → HTTP → `xin:80` (Docker service name, not the host port).
 
 **3.** Stack `.env` (Dockge env editor — one file for the whole stack):
 
@@ -174,9 +191,9 @@ TUNNEL_TOKEN=paste-your-token-here
 
 Simplest: remove the `profiles: [cloudflare]` block from `cloudflared` in compose so it always starts with the stack (as many Dockge setups do). Or set `COMPOSE_PROFILES=cloudflare,watcher` in `.env`.
 
-**4.** Redeploy. You should see `grove`, `grove-sync`, `grove-cloudflared`, and (if enabled) `grove-deploy-watcher`.
+**4.** Redeploy. You should see `xin`, `xin-sync`, `xin-cloudflared`, and (if enabled) `xin-deploy-watcher`.
 
-Do **not** put `COMPOSE_PROFILES` or the token on the `grove` service — only on `.env` / `cloudflared`.
+Do **not** put `COMPOSE_PROFILES` or the token on the `xin` service — only on `.env` / `cloudflared`.
 
 Bookmark **`/grove/`** after this layout change (the site root is now the tools hub).
 
@@ -189,7 +206,7 @@ In Grove → **Settings** → **Word database**:
 - Switching profile loads that profile from the server.
 - Edits save automatically; use **Reload from server** if you need a fresh pull.
 
-Nginx proxies `/api` to `grove-sync`, so Cloudflare (and LAN) use the same site origin — no separate sync URL in the browser.
+Nginx proxies `/api` to `xin-sync`, so Cloudflare (and LAN) use the same site origin — no separate sync URL in the browser.
 
 ### Adding another tool
 
