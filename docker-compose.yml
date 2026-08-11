@@ -37,12 +37,12 @@ services:
     environment:
       DEPLOY_BRANCH: ${DEPLOY_BRANCH:-main}
       POLL_SECONDS: ${POLL_SECONDS:-60}
-      REPO_DIR: ${DEPLOY_HOST_PATH:-/mnt/Maru/Apps/Dockge/stacks/grove}
+      REPO_DIR: ${DEPLOY_HOST_PATH:-/mnt/Maru/Apps/Dockge/stacks/xin}
       DEPLOY_SSH_KEY: ${DEPLOY_SSH_KEY:-}
     volumes:
-      - ${DEPLOY_HOST_PATH:-/mnt/Maru/Apps/Dockge/stacks/grove}:${DEPLOY_HOST_PATH:-/mnt/Maru/Apps/Dockge/stacks/grove}
+      - ${DEPLOY_HOST_PATH:-/mnt/Maru/Apps/Dockge/stacks/xin}:${DEPLOY_HOST_PATH:-/mnt/Maru/Apps/Dockge/stacks/xin}
       - /var/run/docker.sock:/var/run/docker.sock
-    working_dir: ${DEPLOY_HOST_PATH:-/mnt/Maru/Apps/Dockge/stacks/grove}
+    working_dir: ${DEPLOY_HOST_PATH:-/mnt/Maru/Apps/Dockge/stacks/xin}
     profiles:
       - watcher
 

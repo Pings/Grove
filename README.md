@@ -49,14 +49,24 @@ Dockge manages compose stacks from a **stacks folder**. Find yours in TrueNAS �
 
 ```bash
 cd /mnt/Maru/Apps/Dockge/stacks
-sudo git clone https://github.com/Pings/Grove.git grove
-cd grove
+sudo git clone https://github.com/Pings/Xin.git xin
+cd xin
 sudo cp docker-compose.yml compose.yaml
+```
+
+If you already have a stack folder named `grove`, you can keep it — just point `DEPLOY_HOST_PATH` at that path. New installs should use `xin`.
+
+Update an existing clone’s remote after the GitHub rename:
+
+```bash
+cd /mnt/Maru/Apps/Dockge/stacks/grove   # or xin
+sudo git remote set-url origin https://github.com/Pings/Xin.git
+sudo git fetch origin
 ```
 
 **2. Deploy in Dockge**
 
-1. Open Dockge → **grove** (or **Scan Stacks Folder**).
+1. Open Dockge → **xin** (or **Scan Stacks Folder**; rename the stack if it still says grove).
 2. Confirm `compose.yaml` loaded (full repo must include `Dockerfile`, `package.json`, `src/`, `hub/`).
 3. **Deploy** (first build takes a few minutes).
 
@@ -71,21 +81,21 @@ sudo cp docker-compose.yml compose.yaml
 Manual:
 
 ```bash
-cd /mnt/Maru/Apps/Dockge/stacks/grove
+cd /mnt/Maru/Apps/Dockge/stacks/xin
 sudo ./deploy/deploy.sh
 ```
 
 Or force a rebuild even when already current:
 
 ```bash
-cd /mnt/Maru/Apps/Dockge/stacks/grove
+cd /mnt/Maru/Apps/Dockge/stacks/xin
 sudo FORCE_REBUILD=1 ./deploy/deploy.sh
 ```
 
 If update fails with *local changes to compose.yaml would be overwritten*, Dockge edited the compose file. Fix once with a hard reset (keeps `.env`):
 
 ```bash
-cd /mnt/Maru/Apps/Dockge/stacks/grove
+cd /mnt/Maru/Apps/Dockge/stacks/xin
 sudo git fetch origin main
 sudo git reset --hard origin/main
 sudo cp docker-compose.yml compose.yaml
@@ -101,7 +111,7 @@ A small **deploy-watcher** container polls `origin/main` and rebuilds only `grov
 **1. Put ports, tunnel, and watcher settings in `.env`:**
 
 ```bash
-cd /mnt/Maru/Apps/Dockge/stacks/grove
+cd /mnt/Maru/Apps/Dockge/stacks/xin
 sudo nano .env
 ```
 
@@ -112,7 +122,7 @@ GROVE_PORT=8081
 SYNC_PORT=8090
 COMPOSE_PROFILES=cloudflare,watcher
 TUNNEL_TOKEN=your-token-here
-DEPLOY_HOST_PATH=/mnt/Maru/Apps/Dockge/stacks/grove
+DEPLOY_HOST_PATH=/mnt/Maru/Apps/Dockge/stacks/xin
 DEPLOY_BRANCH=main
 POLL_SECONDS=60
 ```
