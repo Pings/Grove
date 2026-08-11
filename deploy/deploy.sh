@@ -51,7 +51,7 @@ git checkout "$BRANCH"
 git reset --hard "origin/$BRANCH"
 
 # Dockge reads compose.yaml; regenerate from the repo’s compose file.
-# Custom ports / tunnel live in .env (GROVE_PORT, TUNNEL_TOKEN, COMPOSE_PROFILES).
+# Custom ports / tunnel live in .env (XIN_PORT, TUNNEL_TOKEN, COMPOSE_PROFILES).
 cp docker-compose.yml compose.yaml
 
 echo "$LOG_TAG rebuilding containers..."
