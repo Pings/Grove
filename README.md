@@ -54,19 +54,30 @@ cd xin
 sudo cp docker-compose.yml compose.yaml
 ```
 
-If you already have a stack folder named `grove`, you can keep it — just point `DEPLOY_HOST_PATH` at that path. New installs should use `xin`.
-
-Update an existing clone’s remote after the GitHub rename:
+If you still have a stack folder named `grove`, rename it (stop the stack in Dockge first):
 
 ```bash
-cd /mnt/Maru/Apps/Dockge/stacks/grove   # or xin
+cd /mnt/Maru/Apps/Dockge/stacks
+sudo docker compose -f grove/compose.yaml down   # if it is running
+sudo mv grove xin
+cd xin
 sudo git remote set-url origin https://github.com/Pings/Xin.git
-sudo git fetch origin
+sudo git fetch origin main
+sudo git reset --hard origin/main
+sudo cp docker-compose.yml compose.yaml
 ```
+
+Then set in `.env`:
+
+```env
+DEPLOY_HOST_PATH=/mnt/Maru/Apps/Dockge/stacks/xin
+```
+
+Rescan / open the **xin** stack in Dockge and deploy again.
 
 **2. Deploy in Dockge**
 
-1. Open Dockge → **xin** (or **Scan Stacks Folder**; rename the stack if it still says grove).
+1. Open Dockge → **xin** (or **Scan Stacks Folder**).
 2. Confirm `compose.yaml` loaded (full repo must include `Dockerfile`, `package.json`, `src/`, `hub/`).
 3. **Deploy** (first build takes a few minutes).
 
