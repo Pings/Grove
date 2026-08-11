@@ -135,7 +135,7 @@ sudo ./deploy/deploy.sh
 
 ### Auto-update from git (recommended: deploy watcher)
 
-A small **deploy-watcher** container polls `origin/main` and rebuilds only `xin` + `xin-sync` when the branch moves (same idea as Rubric Marker). It does **not** recreate cloudflared or itself, so the tunnel stays up.
+A small **deploy-watcher** container polls `origin/main` and rebuilds `xin`, `xin-sync`, and `xin-covet` when the branch moves (same idea as Rubric Marker). It does **not** recreate cloudflared or itself, so the tunnel stays up.
 
 **1. Put ports, tunnel, and watcher settings in `.env`:**
 
@@ -158,7 +158,7 @@ POLL_SECONDS=60
 
 `DEPLOY_HOST_PATH` must be the **absolute host path** of this stack (Dockge bind-mounts it at the same path inside the watcher so `docker compose` via `docker.sock` works).
 
-**2. Redeploy** in Dockge (or `docker compose --profile watcher up -d --build`). You should see `xin-deploy-watcher` alongside `xin` / `xin-sync`.
+**2. Redeploy** in Dockge (or `docker compose --profile watcher up -d --build`). You should see `xin-deploy-watcher` alongside `xin` / `xin-sync` / `xin-covet`.
 
 Logs: Dockge → xin-deploy-watcher, or `docker logs -f xin-deploy-watcher`.
 
@@ -192,7 +192,7 @@ TUNNEL_TOKEN=paste-your-token-here
 
 Simplest: remove the `profiles: [cloudflare]` block from `cloudflared` in compose so it always starts with the stack (as many Dockge setups do). Or set `COMPOSE_PROFILES=cloudflare,watcher` in `.env`.
 
-**4.** Redeploy. You should see `xin`, `xin-sync`, `xin-cloudflared`, and (if enabled) `xin-deploy-watcher`.
+**4.** Redeploy. You should see `xin`, `xin-sync`, `xin-covet`, `xin-cloudflared`, and (if enabled) `xin-deploy-watcher`.
 
 Do **not** put `COMPOSE_PROFILES` or the token on the `xin` service — only on `.env` / `cloudflared`.
 
