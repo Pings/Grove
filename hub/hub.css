@@ -1,0 +1,141 @@
+:root {
+  --bg: #f3efe6;
+  --ink: #1c1915;
+  --muted: #6b5344;
+  --leaf: #1f5c4a;
+  --leaf-soft: rgba(31, 92, 74, 0.12);
+  --line: rgba(107, 83, 68, 0.18);
+  --font-display: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+  --font-body: "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  font-family: var(--font-body);
+  color: var(--ink);
+  background: var(--bg);
+}
+
+.atmosphere {
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(ellipse 70% 48% at 8% -8%, rgba(212, 168, 75, 0.16), transparent 55%),
+    radial-gradient(ellipse 55% 40% at 100% 0%, rgba(31, 92, 74, 0.1), transparent 52%),
+    linear-gradient(165deg, #f8f4eb 0%, #f3efe6 45%, #ebe4d8 100%);
+}
+
+.shell {
+  width: min(40rem, calc(100% - 2.5rem));
+  margin: 0 auto;
+  padding: clamp(3.5rem, 12vh, 6rem) 0 3rem;
+}
+
+.hero {
+  margin-bottom: 2.25rem;
+}
+
+.eyebrow {
+  margin: 0 0 0.45rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.brand {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(2.8rem, 9vw, 4.2rem);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 0.95;
+  color: var(--leaf);
+}
+
+.lede {
+  margin: 0.85rem 0 0;
+  max-width: 22rem;
+  font-size: 1.05rem;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.tools {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.tool {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  column-gap: 0.75rem;
+  row-gap: 0.2rem;
+  padding: 1.05rem 1.15rem;
+  text-decoration: none;
+  color: inherit;
+  border: 1px solid var(--line);
+  border-radius: 0.2rem;
+  background: color-mix(in srgb, #fff 55%, transparent);
+  transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+
+.tool:hover,
+.tool:focus-visible {
+  background: color-mix(in srgb, #fff 82%, var(--leaf-soft));
+  border-color: color-mix(in srgb, var(--leaf) 35%, var(--line));
+  transform: translateY(-1px);
+  outline: none;
+}
+
+.tool-name {
+  grid-column: 1;
+  font-family: var(--font-display);
+  font-size: 1.45rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.tool-zh {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  font-family: "Songti SC", "Noto Serif SC", "Source Han Serif SC", serif;
+  font-size: 1.55rem;
+  color: var(--leaf);
+  opacity: 0.85;
+}
+
+.tool-desc {
+  grid-column: 1;
+  font-size: 0.92rem;
+  color: var(--muted);
+}
+
+.tool-soon {
+  opacity: 0.55;
+  pointer-events: none;
+  cursor: default;
+}
+
+@media (max-width: 520px) {
+  .shell {
+    width: min(40rem, calc(100% - 1.5rem));
+  }
+
+  .tool {
+    padding: 0.95rem 1rem;
+  }
+}

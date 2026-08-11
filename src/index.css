@@ -132,6 +132,7 @@ a {
   color: var(--leaf);
   line-height: 1;
   flex: 0 0 auto;
+  text-decoration: none;
 }
 
 .brand-leaf {

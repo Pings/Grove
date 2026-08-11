@@ -50,7 +50,7 @@ const TABS = [
 
 function BrandMark() {
   return (
-    <div className="brand" aria-label="Grove">
+    <a className="brand" href="/" aria-label="Grove — back to tools">
       <svg className="brand-leaf" viewBox="0 0 40 48" aria-hidden>
         <path
           d="M20 46c0-18 14-28 14-40C24 8 20 2 20 2S16 8 6 6c0 12 14 22 14 40Z"
@@ -65,7 +65,7 @@ function BrandMark() {
         />
       </svg>
       <span className="brand-word">Grove</span>
-    </div>
+    </a>
   );
 }
 

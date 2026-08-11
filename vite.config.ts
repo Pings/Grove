@@ -8,6 +8,7 @@ const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 
 
 // https://vite.dev/config/
 export default defineConfig({
+  base: '/grove/',
   plugins: [react()],
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),

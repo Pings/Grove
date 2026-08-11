@@ -1,10 +1,23 @@
-# Grove
+# Tools (Grove + friends)
+
+One repo / one Docker stack for personal tools on a single domain:
+
+| Path | App |
+|------|-----|
+| `/` | Tools hub (pick an app) |
+| `/grove/` | **Grove** — Chinese vocabulary garden |
+| `/api/` | Grove sync API (word DBs / profiles) |
+| `/prices/` | *(planned)* price tracker |
+
+Keeping tools together is intentional: one Cloudflare tunnel, one TrueNAS deploy, shared nginx. Add a new tool as another subdirectory (static or its own Vite `base`) rather than a separate repo unless it needs totally different infra.
+
+## Grove
 
 Grow your Chinese in a quiet garden of words.
 
-Local Vite + React learning app (HSK-focused): Shelf, Gather, Tend, Temper, Forms.
+Vite + React (HSK-focused): Shelf, Gather, Tend, Temper, Forms. Lives at **`/grove/`**.
 
-## Where data lives
+### Where Grove data lives
 
 | Data | Location |
 |------|----------|
@@ -12,7 +25,21 @@ Local Vite + React learning app (HSK-focused): Shelf, Gather, Tend, Temper, Form
 | Profiles (Nikko + extras) | Grove server — each profile is its own database |
 | Gemini API key (and model / learned threshold) | Browser only |
 
-There is no “this browser only” mode. Opening the site loads the active profile from the server; edits save back automatically. Create a **new profile** only when you want a separate empty word database (Nikko stays as the main library).
+There is no “this browser only” mode. Opening Grove loads the active profile from the server; edits save back automatically. Create a **new profile** only when you want a separate empty word database (Nikko stays as the main library).
+
+### Local Grove dev
+
+```bash
+npm install
+npm run dev
+```
+
+Open **`http://localhost:5173/grove/`** (Vite `base` is `/grove/`). The tools hub is only served from the Docker/nginx image.
+
+```bash
+npm run bump   # 0.1.x → next patch (run before each push)
+npm run build
+```
 
 ## Deploy on TrueNAS (Dockge)
 
@@ -30,13 +57,14 @@ sudo cp docker-compose.yml compose.yaml
 **2. Deploy in Dockge**
 
 1. Open Dockge → **grove** (or **Scan Stacks Folder**).
-2. Confirm `compose.yaml` loaded (full repo must include `Dockerfile`, `package.json`, `src/`).
+2. Confirm `compose.yaml` loaded (full repo must include `Dockerfile`, `package.json`, `src/`, `hub/`).
 3. **Deploy** (first build takes a few minutes).
 
-**3. Open the app**
+**3. Open the apps**
 
-- LAN: `http://<truenas-ip>:8081` (override with `GROVE_PORT` in `.env`)
-- Public tunnel: your Cloudflare hostname (API is same-origin via `/api`)
+- Hub: `http://<truenas-ip>:8081/` (or `GROVE_PORT` in `.env`)
+- Grove: `http://<truenas-ip>:8081/grove/`
+- Public tunnel: `https://your.domain/` and `https://your.domain/grove/`
 
 **4. Update from git**
 
@@ -65,6 +93,7 @@ sudo ./deploy/deploy.sh
 ```
 
 `compose.yaml` is local-only (gitignored). Git tracks `docker-compose.yml`; deploy copies it to `compose.yaml` after each update. Put ports and the tunnel token in `.env`, not in the compose file.
+
 ### Auto-update from git (recommended)
 
 Keeps TrueNAS on latest `main` without typing commands. Ports and tunnel token stay in `.env` (`GROVE_PORT`, `TUNNEL_TOKEN`) so updates don’t wipe them.
@@ -125,6 +154,8 @@ Simplest: remove the `profiles: [cloudflare]` block from `cloudflared` in compos
 
 Do **not** put `COMPOSE_PROFILES` or the token on the `grove` service — only on `.env` / `cloudflared`.
 
+Bookmark **`/grove/`** after this layout change (the site root is now the tools hub).
+
 ### Profiles (word databases)
 
 In Grove → **Settings** → **Word database**:
@@ -136,9 +167,16 @@ In Grove → **Settings** → **Word database**:
 
 Nginx proxies `/api` to `grove-sync`, so Cloudflare (and LAN) use the same site origin — no separate sync URL in the browser.
 
+### Adding another tool
+
+1. Build or drop static files under e.g. `apps/prices/dist` (or a Vite app with `base: '/prices/'`).
+2. Copy them into the image at `/usr/share/nginx/html/prices/` (extend `Dockerfile`).
+3. Add an nginx `location /prices/` (SPA `try_files` if needed).
+4. Link it from `hub/index.html`.
+
 ### Notes
 
 - Put **`GROVE_PORT`** (and tunnel settings) in `.env` — auto-update regenerates `compose.yaml` from `docker-compose.yml` but keeps `.env`.
 - **Gemini key**: Settings in each browser; restrict by HTTP referrer in [Google AI Studio](https://aistudio.google.com/) for your public URL.
 - Auto-update tracks **`main`**.
-
+- Rename the hub title in `hub/index.html` whenever you settle on a domain/brand name.

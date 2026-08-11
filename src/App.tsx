@@ -36,7 +36,7 @@ export default function App() {
   }
 
   return (
-    <BrowserRouter>
+    <BrowserRouter basename="/grove">
       {bootError && (
         <div className="alert alert-error" style={{ margin: '1rem' }}>
           {bootError}
