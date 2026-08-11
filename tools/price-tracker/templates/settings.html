@@ -45,6 +45,17 @@
       </label>
     </div>
 
+    <div class="settings-row">
+      <label>
+        <span>Wet packs / day</span>
+        <input type="number" name="wet_daily_use" min="0" step="0.1" value="{{ settings.wet_daily_use }}" />
+      </label>
+      <label>
+        <span>Dry grams / day</span>
+        <input type="number" name="dry_daily_g" min="0" step="1" value="{{ settings.dry_daily_g }}" />
+      </label>
+    </div>
+
     <div class="card-actions">
       <button type="submit" class="btn primary">Save</button>
     </div>

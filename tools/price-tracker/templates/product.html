@@ -24,10 +24,24 @@
 
   {% if product.category == 'repeat' and restock %}
     <div class="stats compact" style="margin-top: 0.75rem;">
+      {% if product.stock_kind in ['wet', 'dry'] %}
+      <div>
+        <em>
+          {% if restock.stock_on_hand is not none %}
+            {% if product.stock_kind == 'dry' %}{{ "%.0f"|format(restock.stock_on_hand) }}g{% else %}{{ "%.1f"|format(restock.stock_on_hand)|replace('.0','') }}{% endif %}
+          {% else %}—{% endif %}
+        </em>
+        <span>{% if product.stock_kind == 'dry' %}left{% else %}packs{% endif %}</span>
+      </div>
+      {% else %}
       <div><em>{% if restock.food_level_pct is not none %}{{ "%.0f"|format(restock.food_level_pct) }}%{% else %}—{% endif %}</em><span>food</span></div>
+      {% endif %}
       <div><em>{% if restock.days_left is not none %}{{ "%.0f"|format(restock.days_left) }}d{% else %}—{% endif %}</em><span>left</span></div>
       <div><em>{% if restock.in_check_window %}yes{% else %}no{% endif %}</em><span>checking</span></div>
     </div>
+    {% if product.stock_kind in ['wet', 'dry'] %}
+      <p class="muted-line" style="margin-top: 0.5rem;"><a href="{{ url_for('pantry_page') }}">Update stock on Pantry →</a></p>
+    {% endif %}
   {% endif %}
 
   <div class="card-actions" style="margin-top: 0.85rem;">

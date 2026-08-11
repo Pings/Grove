@@ -16,7 +16,9 @@ DEFAULT_SETTINGS = {
     "drop_percent": "5",
     "drop_amount": "0",
     "repeat_special_percent": "20",
-    "repeat_check_lead_days": "14",
+    "repeat_check_lead_days": "7",
+    "wet_daily_use": "1",
+    "dry_daily_g": "87",
 }
 
 PRODUCT_COLUMNS = {
@@ -27,6 +29,10 @@ PRODUCT_COLUMNS = {
     "food_level_set_at": "TEXT",
     "check_lead_days": "INTEGER",
     "special_threshold_pct": "REAL",
+    "stock_kind": "TEXT",
+    "stock_on_hand": "REAL",
+    "stock_set_at": "TEXT",
+    "pack_units": "REAL",
 }
 
 PRICE_COLUMNS = {
@@ -50,6 +56,10 @@ class Product:
     food_level_set_at: Optional[str] = None
     check_lead_days: Optional[int] = None
     special_threshold_pct: Optional[float] = None
+    stock_kind: Optional[str] = None
+    stock_on_hand: Optional[float] = None
+    stock_set_at: Optional[str] = None
+    pack_units: Optional[float] = None
 
 
 @dataclass
@@ -89,7 +99,11 @@ def init_db(conn: sqlite3.Connection) -> None:
             food_level_pct REAL,
             food_level_set_at TEXT,
             check_lead_days INTEGER,
-            special_threshold_pct REAL
+            special_threshold_pct REAL,
+            stock_kind TEXT,
+            stock_on_hand REAL,
+            stock_set_at TEXT,
+            pack_units REAL
         );
 
         CREATE TABLE IF NOT EXISTS prices (
@@ -223,6 +237,9 @@ def update_restock(
     food_level_pct: Optional[float] = None,
     check_lead_days: Optional[int] = None,
     special_threshold_pct: Optional[float] = None,
+    stock_kind: Optional[str] = None,
+    stock_on_hand: Optional[float] = None,
+    pack_units: Optional[float] = None,
     mark_purchased: bool = False,
 ) -> Optional[Product]:
     product = get_product(conn, product_id)
@@ -239,14 +256,54 @@ def update_restock(
         else product.special_threshold_pct
     )
     level_set = product.food_level_set_at
+    kind = stock_kind if stock_kind is not None else product.stock_kind
+    if kind:
+        kind = kind.strip().lower()
+        if kind not in {"wet", "dry"}:
+            kind = product.stock_kind
+    units = pack_units if pack_units is not None else product.pack_units
+    on_hand = stock_on_hand if stock_on_hand is not None else product.stock_on_hand
+    stock_set = product.stock_set_at
+    today = datetime.now(timezone.utc).date().isoformat()
 
     if mark_purchased:
-        purchased = (last_purchased_at or datetime.now(timezone.utc).date().isoformat())[:10]
-        level = 100.0 if food_level_pct is None else float(food_level_pct)
-        level_set = purchased
+        purchased = (last_purchased_at or today)[:10]
+        add = float(units) if units is not None else None
+        if kind in {"wet", "dry"} and add is not None:
+            # Buying adds a pack/bag onto current estimated remaining stock.
+            current = float(on_hand) if on_hand is not None else 0.0
+            # Decay from last set before adding, so "bought" stacks on what's left.
+            if product.stock_set_at and on_hand is not None:
+                from .restock import estimate_restock
+
+                settings = get_settings(conn)
+                status = estimate_restock(
+                    last_purchased_at=product.last_purchased_at,
+                    days_supply=product.days_supply,
+                    food_level_pct=product.food_level_pct,
+                    food_level_set_at=product.food_level_set_at,
+                    check_lead_days=int(lead or settings.get("repeat_check_lead_days") or 7),
+                    stock_kind=kind,
+                    stock_on_hand=on_hand,
+                    stock_set_at=product.stock_set_at,
+                    wet_daily=float(settings.get("wet_daily_use") or 1),
+                    dry_daily_g=float(settings.get("dry_daily_g") or 87),
+                )
+                current = float(status.stock_on_hand or 0.0)
+            on_hand = current + add
+            stock_set = purchased
+            level = 100.0
+            level_set = purchased
+        else:
+            level = 100.0 if food_level_pct is None else float(food_level_pct)
+            level_set = purchased
+    elif stock_on_hand is not None:
+        on_hand = float(stock_on_hand)
+        stock_set = today
+        level_set = today
     elif food_level_pct is not None:
         level = float(food_level_pct)
-        level_set = datetime.now(timezone.utc).date().isoformat()
+        level_set = today
 
     conn.execute(
         """
@@ -256,10 +313,26 @@ def update_restock(
             food_level_pct = ?,
             food_level_set_at = ?,
             check_lead_days = ?,
-            special_threshold_pct = ?
+            special_threshold_pct = ?,
+            stock_kind = ?,
+            stock_on_hand = ?,
+            stock_set_at = ?,
+            pack_units = ?
         WHERE id = ?
         """,
-        (purchased, supply, level, level_set, lead, threshold, product_id),
+        (
+            purchased,
+            supply,
+            level,
+            level_set,
+            lead,
+            threshold,
+            kind,
+            on_hand,
+            stock_set,
+            units,
+            product_id,
+        ),
     )
     conn.commit()
     return get_product(conn, product_id)
@@ -458,7 +531,15 @@ def sync_products_from_config(conn: sqlite3.Connection, products: Iterable[dict]
         )
         product = synced[-1]
         if item.get("category") == "repeat" or any(
-            k in item for k in ("days_supply", "last_purchased_at", "food_level_pct")
+            k in item
+            for k in (
+                "days_supply",
+                "last_purchased_at",
+                "food_level_pct",
+                "stock_kind",
+                "stock_on_hand",
+                "pack_units",
+            )
         ):
             update_restock(
                 conn,
@@ -468,6 +549,9 @@ def sync_products_from_config(conn: sqlite3.Connection, products: Iterable[dict]
                 food_level_pct=item.get("food_level_pct"),
                 check_lead_days=item.get("check_lead_days"),
                 special_threshold_pct=item.get("special_threshold_pct"),
+                stock_kind=item.get("stock_kind"),
+                stock_on_hand=item.get("stock_on_hand"),
+                pack_units=item.get("pack_units"),
             )
             synced[-1] = get_product(conn, product.id) or product
     return synced

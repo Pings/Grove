@@ -5,35 +5,39 @@ products:
     currency: NZD
     category: watch
 
-  # Restock — Animates cat food (alert on ≥20% special near replacement time)
+  # Cat food pantry — wet @ 1 pack/day, dry @ 87g/day, lead 7 days, alert ≥20% off
   - name: Hill's Science Diet Adult Indoor Cat Food 4kg
     url: https://www.animates.co.nz/hill-s-science-diet-adult-indoor-dry-cat-food-4kg.html
     currency: NZD
     category: repeat
-    days_supply: 45
-    check_lead_days: 14
+    stock_kind: dry
+    pack_units: 4000
+    check_lead_days: 7
     special_threshold_pct: 20
 
   - name: Hill's Science Diet Ocean Fish Adult Cat Food 85g
     url: https://www.animates.co.nz/hills-science-diet-ocean-fish-adult-cat-food-85g.html
     currency: NZD
     category: repeat
-    days_supply: 7
-    check_lead_days: 5
+    stock_kind: wet
+    pack_units: 1
+    check_lead_days: 7
     special_threshold_pct: 20
 
   - name: Hill's Science Diet Chicken Adult Cat Food 85g
     url: https://www.animates.co.nz/hills-science-diet-chicken-adult-cat-food-85g.html
     currency: NZD
     category: repeat
-    days_supply: 7
-    check_lead_days: 5
+    stock_kind: wet
+    pack_units: 1
+    check_lead_days: 7
     special_threshold_pct: 20
 
   - name: Hill's Science Diet Adult Poultry Selection Variety Pack 12x85g
     url: https://www.animates.co.nz/hill-s-science-diet-adult-poultry-selection-variety-pack-12x85g.html
     currency: NZD
     category: repeat
-    days_supply: 12
-    check_lead_days: 5
+    stock_kind: wet
+    pack_units: 12
+    check_lead_days: 7
     special_threshold_pct: 20

@@ -13,6 +13,7 @@
     <header class="top">
       <a class="brand-link brand" href="{{ url_for('index') }}">Covet</a>
       <nav class="actions">
+        <a class="btn" href="{{ url_for('pantry_page') }}">Pantry</a>
         <a class="btn" href="{{ url_for('settings_page') }}">Settings</a>
         <form method="post" action="{{ url_for('check_all') }}">
           <button type="submit" class="btn primary">Check</button>

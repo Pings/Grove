@@ -84,26 +84,41 @@ def create_app(db_path: Path = db.DEFAULT_DB) -> Flask:
             drop_amount=_to_float(settings.get("drop_amount"), 0.0),
         )
         repeat_special = _to_float(settings.get("repeat_special_percent"), 20.0)
-        default_lead = int(_to_float(settings.get("repeat_check_lead_days"), 14))
-        return gmail, thresholds, repeat_special, default_lead
+        default_lead = int(_to_float(settings.get("repeat_check_lead_days"), 7))
+        wet_daily = _to_float(settings.get("wet_daily_use"), 1.0)
+        dry_daily_g = _to_float(settings.get("dry_daily_g"), 87.0)
+        return gmail, thresholds, repeat_special, default_lead, wet_daily, dry_daily_g
 
-    def enrich_card(conn, row: dict, default_lead: int) -> dict:
+    def restock_for_product(product, default_lead: int, wet_daily: float, dry_daily_g: float):
+        lead = (
+            product.check_lead_days
+            if product.check_lead_days is not None
+            else default_lead
+        )
+        return estimate_restock(
+            last_purchased_at=product.last_purchased_at,
+            days_supply=product.days_supply,
+            food_level_pct=product.food_level_pct,
+            food_level_set_at=product.food_level_set_at,
+            check_lead_days=lead,
+            stock_kind=product.stock_kind,
+            stock_on_hand=product.stock_on_hand,
+            stock_set_at=product.stock_set_at,
+            wet_daily=wet_daily,
+            dry_daily_g=dry_daily_g,
+        ), lead
+
+    def enrich_card(
+        conn, row: dict, default_lead: int, wet_daily: float = 1.0, dry_daily_g: float = 87.0
+    ) -> dict:
         points = db.history(conn, row["id"])
         prices = [p.price for p in points]
         product = db.get_product(conn, row["id"])
-        lead = (
-            product.check_lead_days
-            if product and product.check_lead_days is not None
-            else default_lead
-        )
         restock = None
+        lead = default_lead
         if product and product.category == "repeat":
-            restock = estimate_restock(
-                last_purchased_at=product.last_purchased_at,
-                days_supply=product.days_supply,
-                food_level_pct=product.food_level_pct,
-                food_level_set_at=product.food_level_set_at,
-                check_lead_days=lead,
+            restock, lead = restock_for_product(
+                product, default_lead, wet_daily, dry_daily_g
             )
         return {
             **row,
@@ -127,12 +142,20 @@ def create_app(db_path: Path = db.DEFAULT_DB) -> Flask:
             "food_level_pct": product.food_level_pct if product else None,
             "check_lead_days": lead,
             "special_threshold_pct": product.special_threshold_pct if product else None,
+            "stock_kind": product.stock_kind if product else None,
+            "stock_on_hand": product.stock_on_hand if product else None,
+            "stock_set_at": product.stock_set_at if product else None,
+            "pack_units": product.pack_units if product else None,
             "restock": {
                 "empty_on": restock.empty_on.isoformat() if restock and restock.empty_on else None,
                 "days_left": restock.days_left if restock else None,
                 "in_check_window": restock.in_check_window if restock else True,
                 "food_level_pct": restock.food_level_pct if restock else None,
                 "check_lead_days": lead,
+                "stock_on_hand": restock.stock_on_hand if restock else None,
+                "stock_kind": restock.stock_kind if restock else None,
+                "unit_label": restock.unit_label if restock else None,
+                "daily_use": restock.daily_use if restock else None,
             }
             if restock
             else None,
@@ -141,7 +164,7 @@ def create_app(db_path: Path = db.DEFAULT_DB) -> Flask:
     def maybe_notify_drop(conn, product, old_price, new_price, currency):
         if old_price is None or product.category == "repeat":
             return None
-        gmail, thresholds, _repeat, _lead = load_notify_config(conn)
+        gmail, thresholds, _repeat, _lead, _wet, _dry = load_notify_config(conn)
         alert = DropAlert(
             product_name=product.name,
             product_url=product.url,
@@ -169,7 +192,7 @@ def create_app(db_path: Path = db.DEFAULT_DB) -> Flask:
     def maybe_notify_special(conn, product, scraped):
         if product.category != "repeat":
             return None
-        gmail, thresholds, repeat_special, _lead = load_notify_config(conn)
+        gmail, thresholds, repeat_special, _lead, _wet, _dry = load_notify_config(conn)
         threshold = (
             product.special_threshold_pct
             if product.special_threshold_pct is not None
@@ -261,20 +284,13 @@ def create_app(db_path: Path = db.DEFAULT_DB) -> Flask:
         return f"Archive: +{inserted}"
 
     def check_product(conn, product, *, force: bool = False):
-        gmail, thresholds, repeat_special, default_lead = load_notify_config(conn)
+        gmail, thresholds, repeat_special, default_lead, wet_daily, dry_daily_g = (
+            load_notify_config(conn)
+        )
         del gmail, thresholds, repeat_special
         if product.category == "repeat" and not force:
-            lead = (
-                product.check_lead_days
-                if product.check_lead_days is not None
-                else default_lead
-            )
-            status = estimate_restock(
-                last_purchased_at=product.last_purchased_at,
-                days_supply=product.days_supply,
-                food_level_pct=product.food_level_pct,
-                food_level_set_at=product.food_level_set_at,
-                check_lead_days=lead,
+            status, _lead = restock_for_product(
+                product, default_lead, wet_daily, dry_daily_g
             )
             if not status.in_check_window:
                 left = (
@@ -335,13 +351,13 @@ def create_app(db_path: Path = db.DEFAULT_DB) -> Flask:
     def index():
         conn = get_conn()
         try:
-            _gmail, _t, _rs, default_lead = load_notify_config(conn)
+            _gmail, _t, _rs, default_lead, wet_daily, dry_daily_g = load_notify_config(conn)
             watch = [
-                enrich_card(conn, row, default_lead)
+                enrich_card(conn, row, default_lead, wet_daily, dry_daily_g)
                 for row in db.latest_prices(conn, category="watch")
             ]
             restock = [
-                enrich_card(conn, row, default_lead)
+                enrich_card(conn, row, default_lead, wet_daily, dry_daily_g)
                 for row in db.latest_prices(conn, category="repeat")
             ]
         finally:
@@ -372,7 +388,13 @@ def create_app(db_path: Path = db.DEFAULT_DB) -> Flask:
                     request.form.get("repeat_special_percent") or "20"
                 ).strip(),
                 "repeat_check_lead_days": (
-                    request.form.get("repeat_check_lead_days") or "14"
+                    request.form.get("repeat_check_lead_days") or "7"
+                ).strip(),
+                "wet_daily_use": (
+                    request.form.get("wet_daily_use") or "1"
+                ).strip(),
+                "dry_daily_g": (
+                    request.form.get("dry_daily_g") or "87"
                 ).strip(),
             }
             current = db.get_settings(conn)
@@ -482,6 +504,7 @@ def create_app(db_path: Path = db.DEFAULT_DB) -> Flask:
     @app.post("/products/<int:product_id>/restock")
     def update_restock(product_id: int):
         conn = get_conn()
+        redirect_to = url_for("index")
         try:
             action = (request.form.get("action") or "save").strip()
             days_supply = request.form.get("days_supply", type=float)
@@ -489,6 +512,11 @@ def create_app(db_path: Path = db.DEFAULT_DB) -> Flask:
             purchased = (request.form.get("last_purchased_at") or "").strip() or None
             lead = request.form.get("check_lead_days", type=int)
             threshold = request.form.get("special_threshold_pct", type=float)
+            stock_kind = (request.form.get("stock_kind") or "").strip() or None
+            stock_on_hand = request.form.get("stock_on_hand", type=float)
+            pack_units = request.form.get("pack_units", type=float)
+            next_page = (request.form.get("next") or "").strip()
+            redirect_to = url_for("pantry_page") if next_page == "pantry" else url_for("index")
 
             if action == "bought":
                 product = db.update_restock(
@@ -499,6 +527,8 @@ def create_app(db_path: Path = db.DEFAULT_DB) -> Flask:
                     food_level_pct=food_level,
                     check_lead_days=lead,
                     special_threshold_pct=threshold,
+                    stock_kind=stock_kind,
+                    pack_units=pack_units,
                     mark_purchased=True,
                 )
                 flash(
@@ -514,6 +544,9 @@ def create_app(db_path: Path = db.DEFAULT_DB) -> Flask:
                     food_level_pct=food_level,
                     check_lead_days=lead,
                     special_threshold_pct=threshold,
+                    stock_kind=stock_kind,
+                    stock_on_hand=stock_on_hand,
+                    pack_units=pack_units,
                 )
                 flash(
                     f"Updated: {short_name(product.name) if product else product_id}",
@@ -521,7 +554,7 @@ def create_app(db_path: Path = db.DEFAULT_DB) -> Flask:
                 )
         finally:
             conn.close()
-        return redirect(url_for("index"))
+        return redirect(redirect_to)
 
     @app.post("/products/<int:product_id>/delete")
     def delete_product(product_id: int):
@@ -536,13 +569,45 @@ def create_app(db_path: Path = db.DEFAULT_DB) -> Flask:
             conn.close()
         return redirect(url_for("index"))
 
+    @app.get("/pantry")
+    def pantry_page():
+        conn = get_conn()
+        try:
+            _g, _t, _r, default_lead, wet_daily, dry_daily_g = load_notify_config(conn)
+            items = [
+                enrich_card(conn, row, default_lead, wet_daily, dry_daily_g)
+                for row in db.latest_prices(conn, category="repeat")
+            ]
+            wet = [p for p in items if (p.get("stock_kind") or "").lower() == "wet"]
+            dry = [p for p in items if (p.get("stock_kind") or "").lower() == "dry"]
+            other = [
+                p
+                for p in items
+                if (p.get("stock_kind") or "").lower() not in {"wet", "dry"}
+            ]
+            settings = db.get_settings(conn)
+        finally:
+            conn.close()
+        return render_template(
+            "pantry.html",
+            wet=wet,
+            dry=dry,
+            other=other,
+            wet_daily=wet_daily,
+            dry_daily_g=dry_daily_g,
+            default_lead=default_lead,
+            settings=settings,
+        )
+
     @app.get("/api/products")
+
     def api_products():
         conn = get_conn()
         try:
-            _g, _t, _r, default_lead = load_notify_config(conn)
+            _g, _t, _r, default_lead, wet_daily, dry_daily_g = load_notify_config(conn)
             out = [
-                enrich_card(conn, row, default_lead) for row in db.latest_prices(conn)
+                enrich_card(conn, row, default_lead, wet_daily, dry_daily_g)
+                for row in db.latest_prices(conn)
             ]
             return jsonify(out)
         finally:
@@ -558,20 +623,11 @@ def create_app(db_path: Path = db.DEFAULT_DB) -> Flask:
                 return redirect(url_for("index"))
             points = db.history(conn, product_id)
             latest = points[-1] if points else None
-            _g, _t, _r, default_lead = load_notify_config(conn)
-            lead = (
-                product.check_lead_days
-                if product.check_lead_days is not None
-                else default_lead
-            )
+            _g, _t, _r, default_lead, wet_daily, dry_daily_g = load_notify_config(conn)
             restock = None
             if product.category == "repeat":
-                restock = estimate_restock(
-                    last_purchased_at=product.last_purchased_at,
-                    days_supply=product.days_supply,
-                    food_level_pct=product.food_level_pct,
-                    food_level_set_at=product.food_level_set_at,
-                    check_lead_days=lead,
+                restock, _lead = restock_for_product(
+                    product, default_lead, wet_daily, dry_daily_g
                 )
             return render_template(
                 "product.html",

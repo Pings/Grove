@@ -256,6 +256,24 @@ input:focus {
   margin: 2rem 0;
 }
 
+.muted-line {
+  margin: 0.35rem 0 0;
+  color: var(--muted);
+  font-family: var(--sans);
+  font-size: 0.85rem;
+}
+
+.muted-line a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.pantry-summary .detail-title { margin-bottom: 0.15rem; }
+
+.pantry-form {
+  margin-top: 0.65rem;
+}
+
 .back {
   margin: 0 0 0.75rem;
   font-family: var(--sans);
