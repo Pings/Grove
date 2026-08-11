@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -12,10 +13,14 @@ from .notify import (
     AlertThresholds,
     DropAlert,
     GmailConfig,
+    SpecialAlert,
     send_drop_alert,
+    send_special_alert,
     send_test_email,
     should_alert,
+    should_special_alert,
 )
+from .restock import clean_product_url, estimate_restock
 from .scrape import scrape_product
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -25,6 +30,10 @@ STATIC_DIR = ROOT / "static"
 
 def short_name(name: str, limit: int = 34) -> str:
     text = (name or "").strip()
+    for prefix in ("Hill's Science Diet ", "Hills Science Diet ", "Hill's "):
+        if text.startswith(prefix):
+            text = text[len(prefix) :]
+            break
     for sep in (" – ", " — ", " - "):
         if sep in text:
             text = text.split(sep, 1)[0].strip()
@@ -48,7 +57,7 @@ def create_app(db_path: Path = db.DEFAULT_DB) -> Flask:
         template_folder=str(TEMPLATE_DIR),
         static_folder=str(STATIC_DIR),
     )
-    app.secret_key = "price-tracker-local-dev"
+    app.secret_key = "covet-local-dev"
     app.config["DB_PATH"] = db_path
     app.jinja_env.filters["short_name"] = short_name
     app.jinja_env.filters["host"] = host_of
@@ -74,12 +83,65 @@ def create_app(db_path: Path = db.DEFAULT_DB) -> Flask:
             drop_percent=_to_float(settings.get("drop_percent"), 5.0),
             drop_amount=_to_float(settings.get("drop_amount"), 0.0),
         )
-        return gmail, thresholds
+        repeat_special = _to_float(settings.get("repeat_special_percent"), 20.0)
+        default_lead = int(_to_float(settings.get("repeat_check_lead_days"), 14))
+        return gmail, thresholds, repeat_special, default_lead
 
-    def maybe_notify(conn, product, old_price, new_price, currency):
-        if old_price is None:
+    def enrich_card(conn, row: dict, default_lead: int) -> dict:
+        points = db.history(conn, row["id"])
+        prices = [p.price for p in points]
+        product = db.get_product(conn, row["id"])
+        lead = (
+            product.check_lead_days
+            if product and product.check_lead_days is not None
+            else default_lead
+        )
+        restock = None
+        if product and product.category == "repeat":
+            restock = estimate_restock(
+                last_purchased_at=product.last_purchased_at,
+                days_supply=product.days_supply,
+                food_level_pct=product.food_level_pct,
+                food_level_set_at=product.food_level_set_at,
+                check_lead_days=lead,
+            )
+        return {
+            **row,
+            "category": product.category if product else row.get("category", "watch"),
+            "points": [
+                {
+                    "t": p.observed_at,
+                    "price": p.price,
+                    "source": p.source,
+                    "availability": p.availability,
+                    "list_price": p.list_price,
+                    "discount_percent": p.discount_percent,
+                }
+                for p in points
+            ],
+            "low": min(prices) if prices else None,
+            "high": max(prices) if prices else None,
+            "count": len(points),
+            "last_purchased_at": product.last_purchased_at if product else None,
+            "days_supply": product.days_supply if product else None,
+            "food_level_pct": product.food_level_pct if product else None,
+            "check_lead_days": lead,
+            "special_threshold_pct": product.special_threshold_pct if product else None,
+            "restock": {
+                "empty_on": restock.empty_on.isoformat() if restock and restock.empty_on else None,
+                "days_left": restock.days_left if restock else None,
+                "in_check_window": restock.in_check_window if restock else True,
+                "food_level_pct": restock.food_level_pct if restock else None,
+                "check_lead_days": lead,
+            }
+            if restock
+            else None,
+        }
+
+    def maybe_notify_drop(conn, product, old_price, new_price, currency):
+        if old_price is None or product.category == "repeat":
             return None
-        gmail, thresholds = load_notify_config(conn)
+        gmail, thresholds, _repeat, _lead = load_notify_config(conn)
         alert = DropAlert(
             product_name=product.name,
             product_url=product.url,
@@ -89,6 +151,62 @@ def create_app(db_path: Path = db.DEFAULT_DB) -> Flask:
         )
         if not should_alert(alert, thresholds):
             return None
+        return _send_or_skip(
+            conn,
+            gmail,
+            product,
+            old_price,
+            new_price,
+            currency,
+            lambda: send_drop_alert(gmail, alert),
+            detail=f"drop -{alert.drop_percent:.1f}%",
+            ok_msg=(
+                f"Alert: {short_name(product.name)} "
+                f"{currency} {old_price:,.0f} → {new_price:,.0f}"
+            ),
+        )
+
+    def maybe_notify_special(conn, product, scraped):
+        if product.category != "repeat":
+            return None
+        gmail, thresholds, repeat_special, _lead = load_notify_config(conn)
+        threshold = (
+            product.special_threshold_pct
+            if product.special_threshold_pct is not None
+            else repeat_special
+        )
+        if not should_special_alert(
+            discount_percent=scraped.discount_percent,
+            threshold=threshold,
+            enabled=thresholds.enabled,
+        ):
+            return None
+        if scraped.list_price is None or scraped.discount_percent is None:
+            return None
+        alert = SpecialAlert(
+            product_name=product.name,
+            product_url=product.url,
+            currency=scraped.currency or product.currency,
+            price=scraped.price,
+            list_price=scraped.list_price,
+            discount_percent=scraped.discount_percent,
+        )
+        return _send_or_skip(
+            conn,
+            gmail,
+            product,
+            scraped.list_price,
+            scraped.price,
+            scraped.currency or product.currency,
+            lambda: send_special_alert(gmail, alert),
+            detail=f"special -{scraped.discount_percent:.0f}%",
+            ok_msg=(
+                f"Special {scraped.discount_percent:.0f}%: "
+                f"{short_name(product.name)} ${scraped.price:,.2f}"
+            ),
+        )
+
+    def _send_or_skip(conn, gmail, product, old_price, new_price, currency, send_fn, detail, ok_msg):
         if not gmail.configured:
             db.log_notification(
                 conn,
@@ -99,9 +217,9 @@ def create_app(db_path: Path = db.DEFAULT_DB) -> Flask:
                 status="skipped",
                 detail="Gmail not configured",
             )
-            return "Drop found — set Gmail in Settings."
+            return "Alert ready — set Gmail in Settings."
         try:
-            send_drop_alert(gmail, alert)
+            send_fn()
             db.log_notification(
                 conn,
                 product_id=product.id,
@@ -109,12 +227,9 @@ def create_app(db_path: Path = db.DEFAULT_DB) -> Flask:
                 new_price=new_price,
                 currency=currency,
                 status="sent",
-                detail=f"-{alert.drop_percent:.1f}%",
+                detail=detail,
             )
-            return (
-                f"Alert sent: {short_name(product.name)} "
-                f"{currency} {old_price:,.0f} → {new_price:,.0f}"
-            )
+            return ok_msg
         except Exception as exc:  # noqa: BLE001
             db.log_notification(
                 conn,
@@ -145,35 +260,93 @@ def create_app(db_path: Path = db.DEFAULT_DB) -> Flask:
                 inserted += 1
         return f"Archive: +{inserted}"
 
+    def check_product(conn, product, *, force: bool = False):
+        gmail, thresholds, repeat_special, default_lead = load_notify_config(conn)
+        del gmail, thresholds, repeat_special
+        if product.category == "repeat" and not force:
+            lead = (
+                product.check_lead_days
+                if product.check_lead_days is not None
+                else default_lead
+            )
+            status = estimate_restock(
+                last_purchased_at=product.last_purchased_at,
+                days_supply=product.days_supply,
+                food_level_pct=product.food_level_pct,
+                food_level_set_at=product.food_level_set_at,
+                check_lead_days=lead,
+            )
+            if not status.in_check_window:
+                left = (
+                    f"{status.days_left:.0f}d left"
+                    if status.days_left is not None
+                    else "stocked"
+                )
+                return "skipped", f"{short_name(product.name)}: skip ({left})"
+
+        previous = db.latest_price(conn, product.id)
+        scraped = scrape_product(product.url)
+        now = datetime.now(timezone.utc)
+        db.add_price(
+            conn,
+            product_id=product.id,
+            price=scraped.price,
+            currency=scraped.currency or product.currency,
+            observed_at=now,
+            source="live",
+            availability=scraped.availability,
+            list_price=scraped.list_price,
+            discount_percent=scraped.discount_percent,
+        )
+        if scraped.name and scraped.name != product.name:
+            product = db.upsert_product(
+                conn,
+                name=scraped.name,
+                url=product.url,
+                currency=scraped.currency or product.currency,
+                notes=product.notes,
+                category=product.category,
+            )
+        notices = []
+        drop = maybe_notify_drop(
+            conn,
+            product,
+            previous.price if previous else None,
+            scraped.price,
+            scraped.currency or product.currency,
+        )
+        if drop:
+            notices.append(drop)
+        special = maybe_notify_special(conn, product, scraped)
+        if special:
+            notices.append(special)
+        disc = (
+            f" (−{scraped.discount_percent:.0f}%)"
+            if scraped.discount_percent
+            else ""
+        )
+        msg = (
+            f"{short_name(product.name)}: "
+            f"${scraped.price:,.2f}{disc}"
+        )
+        return "ok", msg, notices
+
     @app.route("/")
     def index():
         conn = get_conn()
         try:
-            rows = db.latest_prices(conn)
-            charts = []
-            for row in rows:
-                points = db.history(conn, row["id"])
-                prices = [p.price for p in points]
-                charts.append(
-                    {
-                        **row,
-                        "points": [
-                            {
-                                "t": p.observed_at,
-                                "price": p.price,
-                                "source": p.source,
-                                "availability": p.availability,
-                            }
-                            for p in points
-                        ],
-                        "low": min(prices) if prices else None,
-                        "high": max(prices) if prices else None,
-                        "count": len(points),
-                    }
-                )
+            _gmail, _t, _rs, default_lead = load_notify_config(conn)
+            watch = [
+                enrich_card(conn, row, default_lead)
+                for row in db.latest_prices(conn, category="watch")
+            ]
+            restock = [
+                enrich_card(conn, row, default_lead)
+                for row in db.latest_prices(conn, category="repeat")
+            ]
         finally:
             conn.close()
-        return render_template("index.html", products=charts)
+        return render_template("index.html", watch=watch, restock=restock)
 
     @app.get("/settings")
     def settings_page():
@@ -195,6 +368,12 @@ def create_app(db_path: Path = db.DEFAULT_DB) -> Flask:
                 "notify_enabled": "1" if request.form.get("notify_enabled") else "0",
                 "drop_percent": (request.form.get("drop_percent") or "5").strip(),
                 "drop_amount": (request.form.get("drop_amount") or "0").strip(),
+                "repeat_special_percent": (
+                    request.form.get("repeat_special_percent") or "20"
+                ).strip(),
+                "repeat_check_lead_days": (
+                    request.form.get("repeat_check_lead_days") or "14"
+                ).strip(),
             }
             current = db.get_settings(conn)
             if not values["gmail_app_password"] and current.get("gmail_app_password"):
@@ -209,7 +388,7 @@ def create_app(db_path: Path = db.DEFAULT_DB) -> Flask:
     def test_email():
         conn = get_conn()
         try:
-            gmail, _thresholds = load_notify_config(conn)
+            gmail, *_rest = load_notify_config(conn)
             send_test_email(gmail)
             flash(f"Test sent to {gmail.recipient}.", "ok")
         except Exception as exc:  # noqa: BLE001
@@ -220,49 +399,44 @@ def create_app(db_path: Path = db.DEFAULT_DB) -> Flask:
 
     @app.post("/products")
     def add_product():
-        url = (request.form.get("url") or "").strip()
-        name = (request.form.get("name") or "").strip() or None
-        currency = (request.form.get("currency") or "NZD").strip() or "NZD"
-        notes = (request.form.get("notes") or "").strip()
+        url = clean_product_url(request.form.get("url") or "")
+        category = (request.form.get("category") or "watch").strip()
+        if category not in {"watch", "repeat"}:
+            category = "watch"
         if not url:
             flash("URL required.", "error")
             return redirect(url_for("index"))
 
         conn = get_conn()
         try:
-            try:
-                scraped = scrape_product(url)
-                name = name or scraped.name or url
-                currency = scraped.currency or currency
-                product = db.upsert_product(
-                    conn, name=name, url=url, currency=currency, notes=notes
-                )
-                db.add_price(
-                    conn,
-                    product_id=product.id,
-                    price=scraped.price,
-                    currency=scraped.currency or currency,
-                    observed_at=datetime.now(timezone.utc),
-                    source="live",
-                    availability=scraped.availability,
-                )
-                flash(
-                    f"Added {short_name(product.name)} · {scraped.currency} {scraped.price:,.0f}",
-                    "ok",
-                )
+            scraped = scrape_product(url)
+            name = scraped.name or url
+            product = db.upsert_product(
+                conn,
+                name=name,
+                url=url,
+                currency=scraped.currency or "NZD",
+                category=category,
+            )
+            db.add_price(
+                conn,
+                product_id=product.id,
+                price=scraped.price,
+                currency=scraped.currency or "NZD",
+                observed_at=datetime.now(timezone.utc),
+                source="live",
+                availability=scraped.availability,
+                list_price=scraped.list_price,
+                discount_percent=scraped.discount_percent,
+            )
+            flash(
+                f"Added {short_name(product.name)} · ${scraped.price:,.2f}",
+                "ok",
+            )
+            if category == "watch":
                 flash(run_backfill(conn, product, months=6), "ok")
-            except Exception as exc:  # noqa: BLE001
-                if name:
-                    product = db.upsert_product(
-                        conn, name=name, url=url, currency=currency, notes=notes
-                    )
-                    flash(f"Saved, scrape failed: {exc}", "error")
-                    try:
-                        flash(run_backfill(conn, product, months=6), "ok")
-                    except Exception as back_exc:  # noqa: BLE001
-                        flash(f"Archive failed: {back_exc}", "error")
-                else:
-                    flash(f"Add failed: {exc}", "error")
+        except Exception as exc:  # noqa: BLE001
+            flash(f"Add failed: {exc}", "error")
         finally:
             conn.close()
         return redirect(url_for("index"))
@@ -270,6 +444,7 @@ def create_app(db_path: Path = db.DEFAULT_DB) -> Flask:
     @app.post("/check")
     def check_all():
         product_id = request.form.get("id", type=int)
+        force = bool(request.form.get("force"))
         conn = get_conn()
         try:
             products = db.list_products(conn)
@@ -279,46 +454,71 @@ def create_app(db_path: Path = db.DEFAULT_DB) -> Flask:
                 flash("Nothing to check.", "error")
                 return redirect(url_for("index"))
 
-            now = datetime.now(timezone.utc)
             ok = 0
-            errors = []
+            skipped = 0
             for product in products:
                 try:
-                    previous = db.latest_price(conn, product.id)
-                    scraped = scrape_product(product.url)
-                    db.add_price(
-                        conn,
-                        product_id=product.id,
-                        price=scraped.price,
-                        currency=scraped.currency or product.currency,
-                        observed_at=now,
-                        source="live",
-                        availability=scraped.availability,
-                    )
-                    if scraped.name and scraped.name != product.name:
-                        product = db.upsert_product(
-                            conn,
-                            name=scraped.name,
-                            url=product.url,
-                            currency=scraped.currency or product.currency,
-                            notes=product.notes,
-                        )
-                    ok += 1
-                    notice = maybe_notify(
-                        conn,
-                        product,
-                        previous.price if previous else None,
-                        scraped.price,
-                        scraped.currency or product.currency,
-                    )
-                    if notice:
-                        flash(notice, "ok" if "failed" not in notice.lower() else "error")
+                    result = check_product(conn, product, force=force)
+                    status, msg = result[0], result[1]
+                    notices = result[2] if len(result) > 2 else []
+                    if status == "skipped":
+                        skipped += 1
+                        flash(msg, "ok")
+                    else:
+                        ok += 1
+                        flash(msg, "ok")
+                        for notice in notices:
+                            flash(notice, "ok" if "failed" not in notice.lower() else "error")
                 except Exception as exc:  # noqa: BLE001
-                    errors.append(f"{short_name(product.name)}: {exc}")
+                    flash(f"{short_name(product.name)}: {exc}", "error")
             if ok:
                 flash(f"Checked {ok}.", "ok")
-            for err in errors:
-                flash(err, "error")
+            if skipped and not ok:
+                flash(f"Skipped {skipped} (not near restock).", "ok")
+        finally:
+            conn.close()
+        return redirect(url_for("index"))
+
+    @app.post("/products/<int:product_id>/restock")
+    def update_restock(product_id: int):
+        conn = get_conn()
+        try:
+            action = (request.form.get("action") or "save").strip()
+            days_supply = request.form.get("days_supply", type=float)
+            food_level = request.form.get("food_level_pct", type=float)
+            purchased = (request.form.get("last_purchased_at") or "").strip() or None
+            lead = request.form.get("check_lead_days", type=int)
+            threshold = request.form.get("special_threshold_pct", type=float)
+
+            if action == "bought":
+                product = db.update_restock(
+                    conn,
+                    product_id,
+                    last_purchased_at=purchased,
+                    days_supply=days_supply,
+                    food_level_pct=food_level,
+                    check_lead_days=lead,
+                    special_threshold_pct=threshold,
+                    mark_purchased=True,
+                )
+                flash(
+                    f"Logged purchase: {short_name(product.name) if product else product_id}",
+                    "ok",
+                )
+            else:
+                product = db.update_restock(
+                    conn,
+                    product_id,
+                    last_purchased_at=purchased,
+                    days_supply=days_supply,
+                    food_level_pct=food_level,
+                    check_lead_days=lead,
+                    special_threshold_pct=threshold,
+                )
+                flash(
+                    f"Updated: {short_name(product.name) if product else product_id}",
+                    "ok",
+                )
         finally:
             conn.close()
         return redirect(url_for("index"))
@@ -340,23 +540,10 @@ def create_app(db_path: Path = db.DEFAULT_DB) -> Flask:
     def api_products():
         conn = get_conn()
         try:
-            rows = db.latest_prices(conn)
-            out = []
-            for row in rows:
-                points = db.history(conn, row["id"])
-                out.append(
-                    {
-                        **row,
-                        "points": [
-                            {
-                                "t": p.observed_at,
-                                "price": p.price,
-                                "source": p.source,
-                            }
-                            for p in points
-                        ],
-                    }
-                )
+            _g, _t, _r, default_lead = load_notify_config(conn)
+            out = [
+                enrich_card(conn, row, default_lead) for row in db.latest_prices(conn)
+            ]
             return jsonify(out)
         finally:
             conn.close()
@@ -371,11 +558,27 @@ def create_app(db_path: Path = db.DEFAULT_DB) -> Flask:
                 return redirect(url_for("index"))
             points = db.history(conn, product_id)
             latest = points[-1] if points else None
+            _g, _t, _r, default_lead = load_notify_config(conn)
+            lead = (
+                product.check_lead_days
+                if product.check_lead_days is not None
+                else default_lead
+            )
+            restock = None
+            if product.category == "repeat":
+                restock = estimate_restock(
+                    last_purchased_at=product.last_purchased_at,
+                    days_supply=product.days_supply,
+                    food_level_pct=product.food_level_pct,
+                    food_level_set_at=product.food_level_set_at,
+                    check_lead_days=lead,
+                )
             return render_template(
                 "product.html",
                 product=product,
                 points=points,
                 latest=latest,
+                restock=restock,
                 wayback_url=wayback_calendar_url(product.url),
             )
         finally:
@@ -408,8 +611,6 @@ class _PrefixMiddleware:
 
 
 def main():
-    import os
-
     db_path = Path(os.environ["PRICES_DB"]) if os.environ.get("PRICES_DB") else db.DEFAULT_DB
     prefix = os.environ.get("PRICES_URL_PREFIX", "").strip()
     app = create_app(db_path)
@@ -417,7 +618,7 @@ def main():
         app.wsgi_app = _PrefixMiddleware(app.wsgi_app, prefix)  # type: ignore[method-assign]
     host = os.environ.get("PRICES_HOST", "127.0.0.1")
     port = int(os.environ.get("PRICES_PORT", "5050"))
-    print(f"Price Tracker running at http://{host}:{port}{prefix or ''}")
+    print(f"Covet running at http://{host}:{port}{prefix or ''}")
     app.run(host=host, port=port, debug=False, use_reloader=False)
 
 

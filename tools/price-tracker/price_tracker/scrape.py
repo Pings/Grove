@@ -10,7 +10,7 @@ import requests
 from bs4 import BeautifulSoup
 
 USER_AGENT = (
-    "Mozilla/5.0 (compatible; PriceTracker/0.1; +https://github.com/local/price-tracker)"
+    "Mozilla/5.0 (compatible; Covet/0.1; +https://github.com/Pings/Grove)"
 )
 TIMEOUT = 30
 
@@ -22,6 +22,8 @@ class ScrapeResult:
     currency: str
     availability: Optional[str]
     raw_source: str
+    list_price: Optional[float] = None
+    discount_percent: Optional[float] = None
 
 
 def fetch_html(url: str) -> str:
@@ -37,13 +39,96 @@ def fetch_html(url: str) -> str:
 def scrape_product(url: str, html: Optional[str] = None) -> ScrapeResult:
     html = html if html is not None else fetch_html(url)
     soup = BeautifulSoup(html, "html.parser")
+    host = urlparse(url).netloc.lower()
 
-    for extractor in (_from_json_ld, _from_klaviyo, _from_og_meta, _from_dm_price):
+    extractors = []
+    if "animates.co.nz" in host:
+        extractors.append(_from_animates)
+    extractors.extend((_from_json_ld, _from_klaviyo, _from_og_meta, _from_dm_price))
+
+    for extractor in extractors:
         result = extractor(soup, html, url)
         if result is not None:
-            return result
+            return _with_discount(result)
 
     raise ValueError(f"Could not extract a price from {url}")
+
+
+def _with_discount(result: ScrapeResult) -> ScrapeResult:
+    if (
+        result.list_price
+        and result.list_price > 0
+        and result.price < result.list_price
+        and result.discount_percent is None
+    ):
+        result.discount_percent = round(
+            (result.list_price - result.price) / result.list_price * 100.0, 1
+        )
+    return result
+
+
+def _from_animates(soup: BeautifulSoup, html: str, url: str) -> Optional[ScrapeResult]:
+    """Animates (Magento) — capture list/base vs current, including specials."""
+    name = None
+    h1 = soup.select_one("h1.page-title span") or soup.find("h1")
+    if h1:
+        name = h1.get_text(strip=True)
+
+    list_price = None
+    meta_list = soup.find("meta", property="product:price:amount")
+    if meta_list and meta_list.get("content"):
+        list_price = _to_float(meta_list["content"])
+
+    base_match = re.search(r'"basePrice"\s*:\s*"(\$[^"]+)"', html)
+    if base_match:
+        list_price = _parse_money(base_match.group(1)) or list_price
+
+    list_span = soup.select_one("span.list_price")
+    if list_span:
+        list_price = _to_float(list_span.get_text(strip=True)) or list_price
+
+    # Prefer visible one-time final price box
+    price = None
+    final_node = soup.select_one('[data-price-type="finalPrice"]')
+    if final_node and final_node.get("data-price-amount"):
+        price = _to_float(final_node["data-price-amount"])
+
+    final_match = re.search(r'"finalPrice"\s*:\s*"(\$[^"]+)"', html)
+    # Magento config often has multiple finalPrice blocks; use JSON-LD for live shelf price
+    json_ld = _from_json_ld(soup, html, url)
+    if json_ld:
+        price = json_ld.price
+        name = name or json_ld.name
+        avail = json_ld.availability
+    else:
+        avail = None
+        if price is None and final_match:
+            price = _parse_money(final_match.group(1))
+
+    if price is None:
+        return None
+
+    # True specials: hasSpecialPrice non-empty, or special-price DOM
+    has_special = bool(
+        re.search(r'"hasSpecialPrice"\s*:\s*"(?!")[^"]+"', html)
+        or soup.select_one(".special-price")
+    )
+    discount = None
+    if list_price and list_price > price:
+        discount = round((list_price - price) / list_price * 100.0, 1)
+        # Frequent Feeder alone often ~15%; still report the math
+        if not has_special and discount < 5:
+            discount = None
+
+    return ScrapeResult(
+        name=name,
+        price=price,
+        currency="NZD",
+        availability=avail,
+        raw_source="animates",
+        list_price=list_price,
+        discount_percent=discount,
+    )
 
 
 def _from_json_ld(soup: BeautifulSoup, html: str, url: str) -> Optional[ScrapeResult]:
@@ -179,14 +264,12 @@ def _to_float(value) -> Optional[float]:
     if isinstance(value, (int, float)):
         return float(value)
     text = str(value).strip()
-    # Schema / API values are usually plain numbers like "1199.00"
     if re.fullmatch(r"\d+(?:\.\d+)?", text.replace(",", "")):
         return float(text.replace(",", ""))
     return _parse_money(text)
 
 
 def _parse_money(text: str) -> Optional[float]:
-    # Require thousand-separators when present so "1199.00" is not read as 119
     match = re.search(
         r"(?:NZ\$|A\$|US\$|\$)?\s*"
         r"(\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?|\d+\.\d{1,2}|\d+)",

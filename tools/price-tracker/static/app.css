@@ -330,8 +330,78 @@ th {
   border-top: 1px solid var(--line);
 }
 
-@media (max-width: 640px) {
-  .price-now { text-align: left; }
-  .card-head { flex-direction: column; }
-  .settings-row { grid-template-columns: 1fr; }
+.section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 1.4rem 0 0.65rem;
 }
+
+.section-head h2 {
+  margin: 0;
+  font-size: 1.05rem;
+  letter-spacing: -0.01em;
+}
+
+.badge {
+  display: inline-block;
+  margin-top: 0.15rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  background: #e7f3ee;
+  color: var(--accent);
+  font-family: var(--sans);
+  font-size: 0.72rem;
+}
+
+.card.product.due {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+}
+
+.restock-form {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) auto auto;
+  gap: 0.45rem;
+  align-items: end;
+  margin-bottom: 0.75rem;
+}
+
+.restock-form label {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.restock-form span {
+  font-family: var(--sans);
+  font-size: 0.68rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.restock-form input {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 0.4rem 0.5rem;
+  font: inherit;
+  background: #fff;
+}
+
+select {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 0.55rem 0.7rem;
+  font: inherit;
+  background: #fff;
+  color: var(--ink);
+}
+
+@media (max-width: 720px) {
+  .restock-form {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+

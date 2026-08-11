@@ -98,12 +98,50 @@ def send_drop_alert(config: GmailConfig, alert: DropAlert) -> None:
     send_gmail(config, subject=subject, body=body)
 
 
+@dataclass
+class SpecialAlert:
+    product_name: str
+    product_url: str
+    currency: str
+    price: float
+    list_price: float
+    discount_percent: float
+
+
+def should_special_alert(
+    *,
+    discount_percent: Optional[float],
+    threshold: float,
+    enabled: bool,
+) -> bool:
+    if not enabled:
+        return False
+    if discount_percent is None:
+        return False
+    return discount_percent >= threshold
+
+
+def send_special_alert(config: GmailConfig, alert: SpecialAlert) -> None:
+    subject = (
+        f"Special {alert.discount_percent:.0f}%: {alert.product_name} "
+        f"({alert.currency} {alert.price:,.2f})"
+    )
+    body = (
+        f"{alert.product_name} is on special.\n\n"
+        f"Now:  {alert.currency} {alert.price:,.2f}\n"
+        f"Was:  {alert.currency} {alert.list_price:,.2f}\n"
+        f"Off:  {alert.discount_percent:.0f}%\n\n"
+        f"{alert.product_url}\n"
+    )
+    send_gmail(config, subject=subject, body=body)
+
+
 def send_test_email(config: GmailConfig) -> None:
     send_gmail(
         config,
-        subject="Price Tracker test email",
+        subject="Covet test email",
         body=(
             "Your Gmail settings work.\n\n"
-            "You'll get messages here when tracked prices drop past your threshold."
+            "You'll get messages for watch-list drops and restock specials."
         ),
     )

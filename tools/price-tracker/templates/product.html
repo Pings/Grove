@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{{ product.name|short_name }} · Prices{% endblock %}
+{% block title %}{{ product.name|short_name }} · Covet{% endblock %}
 {% block content %}
 <p class="back"><a href="{{ url_for('index') }}">← Back</a></p>
 
@@ -11,7 +11,10 @@
     </div>
     <div class="price-now">
       {% if latest %}
-        <strong>${{ "%.0f"|format(latest.price) }}</strong>
+        <strong>${{ "%.2f"|format(latest.price) }}</strong>
+        {% if latest.discount_percent %}
+          <span class="badge">−{{ "%.0f"|format(latest.discount_percent) }}%</span>
+        {% endif %}
         <span>{{ latest.observed_at[:10] }}</span>
       {% else %}
         <strong>—</strong>
@@ -19,9 +22,18 @@
     </div>
   </div>
 
+  {% if product.category == 'repeat' and restock %}
+    <div class="stats compact" style="margin-top: 0.75rem;">
+      <div><em>{% if restock.food_level_pct is not none %}{{ "%.0f"|format(restock.food_level_pct) }}%{% else %}—{% endif %}</em><span>food</span></div>
+      <div><em>{% if restock.days_left is not none %}{{ "%.0f"|format(restock.days_left) }}d{% else %}—{% endif %}</em><span>left</span></div>
+      <div><em>{% if restock.in_check_window %}yes{% else %}no{% endif %}</em><span>checking</span></div>
+    </div>
+  {% endif %}
+
   <div class="card-actions" style="margin-top: 0.85rem;">
     <form method="post" action="{{ url_for('check_all') }}">
       <input type="hidden" name="id" value="{{ product.id }}" />
+      {% if product.category == 'repeat' %}<input type="hidden" name="force" value="1" />{% endif %}
       <button type="submit" class="btn primary">Check</button>
     </form>
   </div>

@@ -46,7 +46,7 @@ _TEMPLATE = """<!DOCTYPE html>
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Price Tracker</title>
+  <title>Covet</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
   <style>
@@ -118,7 +118,7 @@ _TEMPLATE = """<!DOCTYPE html>
 </head>
 <body>
   <main>
-    <h1>Price Tracker</h1>
+    <h1>Covet</h1>
     <p class="sub">Updated __GENERATED__</p>
     <div id="root"></div>
   </main>

@@ -18,8 +18,8 @@ DEFAULT_CONFIG = ROOT / "products.yaml"
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        prog="price_tracker",
-        description="Track product prices over time, with optional Wayback backfill.",
+        prog="covet",
+        description="Covet — track product prices and restock specials.",
     )
     parser.add_argument("--db", type=Path, default=db.DEFAULT_DB, help="SQLite database path")
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
@@ -86,7 +86,7 @@ def main(argv: list[str] | None = None) -> int:
         app = create_app(db_path)
         if prefix:
             app.wsgi_app = _PrefixMiddleware(app.wsgi_app, prefix)  # type: ignore[method-assign]
-        print(f"Price Tracker running at http://{args.host}:{args.port}{prefix or ''}")
+        print(f"Covet running at http://{args.host}:{args.port}{prefix or ''}")
         app.run(host=args.host, port=args.port, debug=False, use_reloader=False)
         return 0
     parser.error(f"Unknown command: {args.command}")

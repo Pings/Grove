@@ -9,7 +9,7 @@ COPY . .
 
 ENV PRICES_HOST=0.0.0.0
 ENV PRICES_PORT=5050
-ENV PRICES_URL_PREFIX=/prices
+ENV PRICES_URL_PREFIX=/covet
 ENV PRICES_DB=/data/prices.db
 
 RUN mkdir -p /data
