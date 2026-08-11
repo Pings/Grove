@@ -379,7 +379,7 @@ th {
 
 .restock-form {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr)) auto auto;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto auto;
   gap: 0.45rem;
   align-items: end;
   margin-bottom: 0.75rem;
